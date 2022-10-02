@@ -1,63 +1,134 @@
-use std::ffi::c_void;
+use crate::image::{ColorFormat, ImageRef};
+use anyhow::{ensure, Result};
 use windows::Win32::Foundation::*;
 use windows::Win32::Graphics::Gdi::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
 
-pub fn capture_gdi() {
-    let content = unsafe {
-        // SAFETY: Call to FFI functions according to their specification
+// https://github.com/obsproject/obs-studio/blob/6fb83abaeb711d1e12054d2ef539da5c43237c58/plugins/win-capture/dc-capture.c#L38
 
-        let hdc = GetDC(HWND(0));
-        let memdc = CreateCompatibleDC(hdc);
-        assert!(!memdc.is_invalid());
+pub struct CaptureGdi {
+    is_open: bool,
 
-        let width = GetSystemMetrics(SM_CXVIRTUALSCREEN);
-        let height = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+    hdc: HDC,
+    memdc: CreatedHDC,
+    width: u32,
+    height: u32,
+    bitmap: HBITMAP,
+    bitmap_data: *mut u8,
+    old_bitmap: HGDIOBJ,
+}
 
-        let bitmap = CreateCompatibleBitmap(hdc, width, height);
+impl CaptureGdi {
+    pub fn new() -> Result<CaptureGdi> {
+        // SAFETY: FFI
+        unsafe {
+            //FIXME: Resource leak on early return
 
-        SelectObject(memdc, bitmap);
+            let hdc = GetDC(HWND(0));
+            ensure!(!hdc.is_invalid(), "unable to get desktop DC");
 
-        BitBlt(memdc, 0, 0, width, height, hdc, 0, 0, SRCCOPY);
+            let memdc = CreateCompatibleDC(hdc);
+            ensure!(!memdc.is_invalid(), "unable to create compatible DC");
 
-        let mut bitmapinfo = BITMAPINFO {
-            bmiHeader: BITMAPINFOHEADER {
-                biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
-                biWidth: width,
-                biHeight: height,
-                biPlanes: 1,
-                biBitCount: 32,
-                biCompression: BI_RGB,
-                biSizeImage: 0,
-                biXPelsPerMeter: 0,
-                biYPelsPerMeter: 0,
-                biClrUsed: 0,
-                biClrImportant: 0,
-            },
-            bmiColors: std::mem::zeroed(),
+            let width = GetSystemMetrics(SM_CXSCREEN);
+            let height = GetSystemMetrics(SM_CYSCREEN);
+            ensure!(width > 0 && height > 0, "unable to query screen size");
+
+            let width = width as u32;
+            let height = height as u32;
+
+            // negate height to produce top-bottom bitmap
+            let bitmapinfo = BITMAPINFO {
+                bmiHeader: BITMAPINFOHEADER {
+                    biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
+                    biWidth: width as i32,
+                    biHeight: -(height as i32),
+                    biPlanes: 1,
+                    biBitCount: 32,
+                    biCompression: BI_RGB,
+                    biSizeImage: 0,
+                    biXPelsPerMeter: 0,
+                    biYPelsPerMeter: 0,
+                    biClrUsed: 0,
+                    biClrImportant: 0,
+                },
+                bmiColors: std::mem::zeroed(),
+            };
+
+            let mut bitmap_data = std::ptr::null_mut();
+
+            let bitmap = CreateDIBSection(
+                hdc,
+                &bitmapinfo,
+                DIB_RGB_COLORS,
+                &mut bitmap_data,
+                HANDLE(0),
+                0,
+            )?;
+            ensure!(!bitmap.is_invalid(), "unable to create bitmap");
+
+            let old_bitmap = SelectObject(memdc, bitmap);
+
+            Ok(CaptureGdi {
+                is_open: true,
+                hdc,
+                memdc,
+                width,
+                height,
+                bitmap,
+                bitmap_data: bitmap_data as *mut u8,
+                old_bitmap,
+            })
+        }
+    }
+
+    pub fn capture(&mut self) -> Result<ImageRef> {
+        assert!(self.is_open, "tried to capture from closed CaptureGdi");
+
+        let slice = unsafe {
+            // SAFETY: FFI
+            let ret = BitBlt(
+                self.memdc,
+                0,
+                0,
+                self.width as i32,
+                self.height as i32,
+                self.hdc,
+                0,
+                0,
+                SRCCOPY,
+            );
+            ensure!(ret.as_bool(), "failed to BitBlt");
+
+            let ret = GdiFlush();
+            ensure!(ret.as_bool(), "failed to flush gdi");
+
+            let bytes = self.width as usize * self.height as usize * 4;
+            std::slice::from_raw_parts(self.bitmap_data, bytes)
         };
-        let mut image_content = vec![0u8; (width * height * 4) as usize];
-        let copied_lines = GetDIBits(
-            memdc,
-            bitmap,
-            0,
-            height as u32,
-            image_content.as_mut_ptr() as *mut c_void,
-            &mut bitmapinfo,
-            DIB_RGB_COLORS,
-        );
-        assert!(copied_lines >= 0);
-        assert!(copied_lines == height);
 
-        println!("captured {}x{}", width, height);
+        Ok(ImageRef {
+            color_format: ColorFormat::Bgra8888,
+            width: self.width,
+            height: self.height,
+            data: slice,
+        })
+    }
+}
 
-        ReleaseDC(HWND(0), hdc);
+// SAFETY: GDI objects are Send (But not Sync)
+unsafe impl Send for CaptureGdi {}
 
-        DeleteObject(bitmap);
-        DeleteDC(memdc);
+impl Drop for CaptureGdi {
+    fn drop(&mut self) {
+        // SAFETY: FFI
+        unsafe {
+            SelectObject(self.memdc, self.old_bitmap);
 
-        image_content
-    };
+            ReleaseDC(HWND(0), self.hdc);
 
-    std::fs::write("image.rgb", &content).unwrap();
+            DeleteObject(self.bitmap);
+            DeleteDC(self.memdc);
+        }
+    }
 }

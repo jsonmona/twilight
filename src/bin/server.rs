@@ -1,4 +1,4 @@
 fn main() {
     twilight::platform::win32::init_dpi();
-    twilight::platform::win32::capture_gdi::capture_gdi();
+    let mut capture = twilight::platform::win32::capture_gdi::CaptureGdi::new().unwrap();
 }
