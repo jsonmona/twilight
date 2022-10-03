@@ -1,3 +1,9 @@
+/*
+ * Other files in this src/schema/ directory is generated.
+ * Please run either `regen-schema.ps1` or `regen-schema.sh` depending on your platform,
+ * and add module definitions as needed.
+ */
+
 mod error_capnp;
 mod host_capnp;
 mod screen_capnp;

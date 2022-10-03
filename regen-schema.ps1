@@ -1,5 +1,7 @@
-# Please look at shell script version for help
+# Please look at .sh version for help
 
-$OUT_DIR="src\schema"
+$OUT_DIR="src"
 
-capnp compile -orust:$OUT_DIR --src-prefix=schema (Get-ChildItem .\schema\*.capnp | Select-Object -Expand FullName)
+$files = (Get-ChildItem .\schema\*.capnp | Select-Object -Expand FullName | Resolve-Path -Relative)
+
+capnp compile -orust:$OUT_DIR $files

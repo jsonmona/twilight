@@ -1,5 +1,8 @@
 @0xc7abb4188a2ffcd3;
 
+using Rust = import "rust.capnp";
+$Rust.parentModule("schema");
+
 using import "error.capnp".Result;
 using import "stream.capnp".Stream;
 

@@ -10,6 +10,6 @@
 
 set -eux
 
-OUT_DIR='src/schema'
+OUT_DIR='src'
 
-capnp compile -orust:$OUT_DIR --src-prefix=schema schema/*.capnp
+capnp compile -orust:$OUT_DIR schema/*.capnp

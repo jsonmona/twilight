@@ -7,6 +7,7 @@ edition = "2021"
 thiserror = "1.0.35"
 anyhow = "1.0.65"
 capnp = "0.14.9"
+tokio = { version = "1.21.2", features = ["full"] }
 
 [dependencies.windows]
 version = "0.40.0"
