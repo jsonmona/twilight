@@ -1,7 +1,15 @@
+use anyhow::Result;
+use std::future::Future;
 use crate::viewer::display_state::DisplayState;
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
+
+fn eval_local_future<F: Future>(future: F) -> F::Output {
+    let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+    let localset = tokio::task::LocalSet::new();
+    localset.block_on(&runtime, future)
+}
 
 // must be called from main thread (because EventLoop requires to do so)
 pub fn launch() -> ! {
@@ -14,7 +22,7 @@ pub fn launch() -> ! {
             // Initialize graphic state
             //TODO: What to do when state_box is not none? (relevant on mobile platforms)
             if state_box.is_none() {
-                state_box = Some(pollster::block_on(DisplayState::new(&window)).unwrap());
+                state_box = Some(eval_local_future(DisplayState::new(&window)).unwrap());
             }
         }
         Event::MainEventsCleared => {
