@@ -1,3 +1,4 @@
+#[derive(Copy, Clone)]
 pub enum ColorFormat {
     // 0xAABBGGRR in little-endian
     Rgba8888,

@@ -114,10 +114,11 @@ impl CaptureGdi {
             data: slice,
         })
     }
-}
 
-// SAFETY: GDI objects are Send (But not Sync)
-unsafe impl Send for CaptureGdi {}
+    pub fn resolution(&self) -> (u32, u32) {
+        (self.width, self.height)
+    }
+}
 
 impl Drop for CaptureGdi {
     fn drop(&mut self) {

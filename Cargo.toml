@@ -10,6 +10,7 @@ capnp = "0.14.9"
 tokio = { version = "1.21.2", features = ["full"] }
 winit = "0.27.4"
 wgpu = "0.14.0"
+env_logger = "0.10.0"
 
 [dependencies.windows]
 version = "0.42.0"
