@@ -1,8 +1,8 @@
 use crate::image::Image;
+use crate::viewer::desktop_display_state::DesktopDisplayState;
 use anyhow::{ensure, Context, Result};
 use winit::event::WindowEvent;
 use winit::window::Window;
-use crate::viewer::desktop_display_state::DesktopDisplayState;
 
 pub struct DisplayState {
     surface: wgpu::Surface,
@@ -18,8 +18,12 @@ impl DisplayState {
     pub async fn new(window: &Window) -> Result<Self> {
         let size = window.inner_size();
 
-        let instance = wgpu::Instance::new(wgpu::Backends::PRIMARY);
-        let surface = unsafe { instance.create_surface(window) };
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::PRIMARY,
+            dx12_shader_compiler: wgpu::Dx12Compiler::Fxc,
+        });
+
+        let surface = unsafe { instance.create_surface(window) }.expect("unable to create surface");
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::LowPower,
@@ -53,6 +57,7 @@ impl DisplayState {
             height: size.height,
             present_mode: wgpu::PresentMode::AutoVsync,
             alpha_mode: wgpu::CompositeAlphaMode::Opaque,
+            view_formats: vec![wgpu::TextureFormat::Bgra8Unorm],
         };
         surface.configure(&device, &surface_config);
 
@@ -62,7 +67,7 @@ impl DisplayState {
             queue,
             surface_config,
             size,
-            desktop_display: None
+            desktop_display: None,
         })
     }
 

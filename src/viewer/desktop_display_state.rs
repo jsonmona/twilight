@@ -1,6 +1,6 @@
+use crate::image::Image;
 use std::sync::Mutex;
 use wgpu::{BindGroup, CommandEncoder, Device, Queue, SurfaceConfiguration, Texture, TextureView};
-use crate::image::Image;
 
 pub struct DesktopDisplayState {
     next_img: Mutex<Option<Image>>,
@@ -25,6 +25,7 @@ impl DesktopDisplayState {
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Bgra8Unorm,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[wgpu::TextureFormat::Bgra8Unorm],
         });
 
         let desktop_view = desktop_texture.create_view(&Default::default());
@@ -61,22 +62,20 @@ impl DesktopDisplayState {
             ],
         });
 
-        let bind_group = device.create_bind_group(
-            &wgpu::BindGroupDescriptor {
-                label: Some("desktop texture bind group"),
-                layout: &bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&desktop_view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&desktop_sampler),
-                    }
-                ],
-            }
-        );
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("desktop texture bind group"),
+            layout: &bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&desktop_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&desktop_sampler),
+                },
+            ],
+        });
 
         let shader = device.create_shader_module(wgpu::include_wgsl!("display.wgsl"));
 
@@ -137,7 +136,13 @@ impl DesktopDisplayState {
         *next_img = Some(img);
     }
 
-    pub fn render(&mut self, _device: &Device, queue: &Queue, output_view: &TextureView, encoder: &mut CommandEncoder) -> Result<(), wgpu::SurfaceError> {
+    pub fn render(
+        &mut self,
+        _device: &Device,
+        queue: &Queue,
+        output_view: &TextureView,
+        encoder: &mut CommandEncoder,
+    ) -> Result<(), wgpu::SurfaceError> {
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("desktop render pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {

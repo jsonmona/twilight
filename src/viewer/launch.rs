@@ -26,7 +26,7 @@ async fn receiver(tx: tokio::sync::mpsc::Sender<Image>) -> Result<u64> {
     stream.set_nodelay(true)?;
     let w = stream.read_u32_le().await?;
     let h = stream.read_u32_le().await?;
-    println!("Receiving {}x{} image", w, h);
+    println!("Receiving {w}x{h} image");
 
     loop {
         let mut img = Image::new(w, h, ColorFormat::Bgra8888);
@@ -79,7 +79,7 @@ pub fn launch() -> ! {
                     eprintln!("{:?}", wgpu::SurfaceError::OutOfMemory);
                     *control_flow = ControlFlow::Exit;
                 }
-                Err(e) => eprintln!("{:?}", e),
+                Err(e) => eprintln!("{e:?}"),
             }
         }
         Event::WindowEvent {

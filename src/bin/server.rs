@@ -18,7 +18,7 @@ async fn serve() -> anyhow::Result<()> {
         tokio::net::TcpListener::bind((std::net::Ipv4Addr::new(127, 0, 0, 1), 6495)).await?;
 
     let (mut stream, client_addr) = listener.accept().await?;
-    println!("Connected to {}", client_addr);
+    println!("Connected to {client_addr}");
 
     stream.set_nodelay(true)?;
 
