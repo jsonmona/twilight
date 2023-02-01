@@ -1,4 +1,4 @@
-use crate::image::{ColorFormat, ImageRef};
+use crate::image::{ColorFormat, Image};
 use anyhow::{ensure, Result};
 use windows::Win32::Foundation::*;
 use windows::Win32::Graphics::Gdi::*;
@@ -82,7 +82,7 @@ impl CaptureGdi {
         }
     }
 
-    pub fn capture(&mut self) -> Result<ImageRef> {
+    pub fn capture(&mut self) -> Result<Image<&[u8]>> {
         assert!(self.is_open, "tried to capture from closed CaptureGdi");
 
         let slice = unsafe {
@@ -107,7 +107,7 @@ impl CaptureGdi {
             std::slice::from_raw_parts(self.bitmap_data, bytes)
         };
 
-        Ok(ImageRef {
+        Ok(Image {
             color_format: ColorFormat::Bgra8888,
             width: self.width,
             height: self.height,

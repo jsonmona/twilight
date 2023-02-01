@@ -1,4 +1,4 @@
-use crate::image::{ColorFormat, Image};
+use crate::image::{ColorFormat, ImageBuf};
 use crate::viewer::display_state::DisplayState;
 use anyhow::Result;
 use std::future::Future;
@@ -18,7 +18,7 @@ fn eval_local_future<F: Future>(future: F) -> F::Output {
     localset.block_on(&runtime, future)
 }
 
-async fn receiver(tx: tokio::sync::mpsc::Sender<Image>) -> Result<u64> {
+async fn receiver(tx: tokio::sync::mpsc::Sender<ImageBuf>) -> Result<u64> {
     let mut frames = 0;
     let mut stream = tokio::net::TcpStream::connect((Ipv4Addr::new(127, 0, 0, 1), 6495)).await?;
     println!("Connected to {}", stream.peer_addr().unwrap());
@@ -29,7 +29,7 @@ async fn receiver(tx: tokio::sync::mpsc::Sender<Image>) -> Result<u64> {
     println!("Receiving {w}x{h} image");
 
     loop {
-        let mut img = Image::new(w, h, ColorFormat::Bgra8888);
+        let mut img = ImageBuf::alloc(w, h, ColorFormat::Bgra8888);
         stream.read_exact(&mut img.data).await?;
         if tx.send(img).await.is_err() {
             break;

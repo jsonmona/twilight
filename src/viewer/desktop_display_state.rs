@@ -1,16 +1,16 @@
-use crate::image::Image;
+use crate::image::ImageBuf;
 use std::sync::Mutex;
 use wgpu::{BindGroup, CommandEncoder, Device, Queue, SurfaceConfiguration, Texture, TextureView};
 
 pub struct DesktopDisplayState {
-    next_img: Mutex<Option<Image>>,
+    next_img: Mutex<Option<ImageBuf>>,
     render_pipeline: wgpu::RenderPipeline,
     desktop_texture: Texture,
     bind_group: BindGroup,
 }
 
 impl DesktopDisplayState {
-    pub fn new(device: &Device, surface_config: &SurfaceConfiguration, image: Image) -> Self {
+    pub fn new(device: &Device, surface_config: &SurfaceConfiguration, image: ImageBuf) -> Self {
         let desktop_extent = wgpu::Extent3d {
             width: image.width,
             height: image.height,
@@ -129,7 +129,7 @@ impl DesktopDisplayState {
         }
     }
 
-    pub fn update(&mut self, img: Image) {
+    pub fn update(&mut self, img: ImageBuf) {
         //assert!(tex.width() == img.width && tex.height() == img.height, "image size changed");
 
         let mut next_img = self.next_img.lock().unwrap();

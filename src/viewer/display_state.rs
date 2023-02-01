@@ -1,4 +1,4 @@
-use crate::image::Image;
+use crate::image::ImageBuf;
 use crate::viewer::desktop_display_state::DesktopDisplayState;
 use anyhow::{ensure, Context, Result};
 use winit::event::WindowEvent;
@@ -88,7 +88,7 @@ impl DisplayState {
         false
     }
 
-    pub fn update(&mut self, img: Image) {
+    pub fn update(&mut self, img: ImageBuf) {
         match self.desktop_display.as_mut() {
             Some(x) => x.update(img),
             None => {
