@@ -1,4 +1,5 @@
 use crate::platform::win32::capture_gdi::CaptureGdi;
+use std::time::{Duration, Instant};
 use tokio::io::AsyncWriteExt;
 
 pub fn serve() -> anyhow::Result<()> {
@@ -26,10 +27,37 @@ async fn serve_inner() -> anyhow::Result<()> {
     stream.write_all(&w.to_le_bytes()).await?;
     stream.write_all(&h.to_le_bytes()).await?;
 
+    let mut log_time = Instant::now();
+    let mut frames = 0;
+    let mut old_time = Instant::now();
+    let mut capture_duration = Duration::from_secs(0);
+    let mut write_duration = Duration::from_secs(0);
+
     loop {
         let img = capture.capture()?;
+        let capture_time = Instant::now();
+
         anyhow::ensure!(img.width == w);
         anyhow::ensure!(img.height == h);
+
         stream.write_all(img.data).await?;
+        let write_time = Instant::now();
+
+        capture_duration += capture_time - old_time;
+        write_duration += write_time - capture_time;
+        old_time = write_time;
+        frames += 1;
+
+        let elapsed = write_time - log_time;
+        if elapsed > Duration::from_secs(10) {
+            log_time = old_time;
+            let fps = (frames as f64) / elapsed.as_secs_f64();
+            let capture_fps = (frames as f64) / capture_duration.as_secs_f64();
+            println!("Combined FPS: {fps}    Capture FPS: {capture_fps}");
+
+            frames = 0;
+            capture_duration = Duration::from_secs(0);
+            write_duration = Duration::from_secs(0);
+        }
     }
 }
