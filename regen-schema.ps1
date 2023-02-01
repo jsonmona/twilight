@@ -1,7 +1,7 @@
 # Please look at .sh version for help
 
-$OUT_DIR="src"
+$OUT_DIR="src\schema"
 
-$files = (Get-ChildItem .\schema\*.capnp | Select-Object -Expand FullName | Resolve-Path -Relative)
+$files = (Get-ChildItem .\schema\*.fbs | Select-Object -Expand FullName | Resolve-Path -Relative)
 
-capnp compile -orust:$OUT_DIR $files
+flatc -o "$OUT_DIR" --rust $files

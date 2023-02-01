@@ -1,0 +1,36 @@
+namespace video;
+
+enum VideoCodec : byte {
+  Empty = 0,
+  Bgra8888,
+  Rgb24,
+}
+
+table EmptyTable {}
+
+table NotifyVideoStart {
+  width:uint32;
+  height:uint32;
+}
+
+table VideoFrame {
+  video_bytes:uint64;
+  cursor_update:CursorUpdate;
+}
+
+table CursorUpdate {
+  shape:CursorShape;
+  x:uint32;
+  y:uint32;
+  visible:bool;
+}
+
+table CursorShape {
+  image:[ubyte];
+  codec:VideoCodec;
+  xor:bool;
+  hotspotx:float32;
+  hotspoty:float32;
+  width:uint32;
+  height:uint32;
+}

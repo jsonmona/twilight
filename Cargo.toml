@@ -11,6 +11,7 @@ tokio = { version = "1.25.0", features = ["full"] }
 winit = "0.27.5"
 wgpu = "0.15.0"
 env_logger = "0.10.0"
+flatbuffers = "23.1.21"
 
 [dependencies.windows]
 version = "0.43.0"
