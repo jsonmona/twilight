@@ -6,11 +6,23 @@ enum VideoCodec : byte {
   Rgb24,
 }
 
-table EmptyTable {}
-
-table NotifyVideoStart {
+struct Size2u {
   width:uint32;
   height:uint32;
+}
+
+struct Coord2u {
+  x:uint32;
+  y:uint32;
+}
+
+struct Coord2f {
+  x:float32;
+  y:float32;
+}
+
+table NotifyVideoStart {
+  resolution:Size2u;
 }
 
 table VideoFrame {
@@ -20,8 +32,7 @@ table VideoFrame {
 
 table CursorUpdate {
   shape:CursorShape;
-  x:uint32;
-  y:uint32;
+  pos:Coord2u;
   visible:bool;
 }
 
@@ -29,8 +40,6 @@ table CursorShape {
   image:[ubyte];
   codec:VideoCodec;
   xor:bool;
-  hotspotx:float32;
-  hotspoty:float32;
-  width:uint32;
-  height:uint32;
+  hotspot:Coord2f;
+  resolution:Size2u;
 }

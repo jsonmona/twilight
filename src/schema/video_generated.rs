@@ -107,85 +107,378 @@ impl<'a> flatbuffers::Verifiable for VideoCodec {
 }
 
 impl flatbuffers::SimpleToVerifyInSlice for VideoCodec {}
-pub enum EmptyTableOffset {}
-#[derive(Copy, Clone, PartialEq)]
-
-pub struct EmptyTable<'a> {
-  pub _tab: flatbuffers::Table<'a>,
+// struct Size2u, aligned to 4
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq)]
+pub struct Size2u(pub [u8; 8]);
+impl Default for Size2u { 
+  fn default() -> Self { 
+    Self([0; 8])
+  }
+}
+impl core::fmt::Debug for Size2u {
+  fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+    f.debug_struct("Size2u")
+      .field("width", &self.width())
+      .field("height", &self.height())
+      .finish()
+  }
 }
 
-impl<'a> flatbuffers::Follow<'a> for EmptyTable<'a> {
-  type Inner = EmptyTable<'a>;
+impl flatbuffers::SimpleToVerifyInSlice for Size2u {}
+impl<'a> flatbuffers::Follow<'a> for Size2u {
+  type Inner = &'a Size2u;
   #[inline]
   unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
-    Self { _tab: flatbuffers::Table::new(buf, loc) }
+    <&'a Size2u>::follow(buf, loc)
   }
 }
-
-impl<'a> EmptyTable<'a> {
-
+impl<'a> flatbuffers::Follow<'a> for &'a Size2u {
+  type Inner = &'a Size2u;
   #[inline]
-  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
-    EmptyTable { _tab: table }
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    flatbuffers::follow_cast_ref::<Size2u>(buf, loc)
   }
-  #[allow(unused_mut)]
-  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
-    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
-    _args: &'args EmptyTableArgs
-  ) -> flatbuffers::WIPOffset<EmptyTable<'bldr>> {
-    let mut builder = EmptyTableBuilder::new(_fbb);
-    builder.finish()
-  }
-
+}
+impl<'b> flatbuffers::Push for Size2u {
+    type Output = Size2u;
+    #[inline]
+    unsafe fn push(&self, dst: &mut [u8], _written_len: usize) {
+        let src = ::core::slice::from_raw_parts(self as *const Size2u as *const u8, Self::size());
+        dst.copy_from_slice(src);
+    }
 }
 
-impl flatbuffers::Verifiable for EmptyTable<'_> {
+impl<'a> flatbuffers::Verifiable for Size2u {
   #[inline]
   fn run_verifier(
     v: &mut flatbuffers::Verifier, pos: usize
   ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
     use self::flatbuffers::Verifiable;
-    v.visit_table(pos)?
-     .finish();
-    Ok(())
-  }
-}
-pub struct EmptyTableArgs {
-}
-impl<'a> Default for EmptyTableArgs {
-  #[inline]
-  fn default() -> Self {
-    EmptyTableArgs {
-    }
+    v.in_buffer::<Self>(pos)
   }
 }
 
-pub struct EmptyTableBuilder<'a: 'b, 'b> {
-  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
-  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
-}
-impl<'a: 'b, 'b> EmptyTableBuilder<'a, 'b> {
-  #[inline]
-  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> EmptyTableBuilder<'a, 'b> {
-    let start = _fbb.start_table();
-    EmptyTableBuilder {
-      fbb_: _fbb,
-      start_: start,
+impl<'a> Size2u {
+  #[allow(clippy::too_many_arguments)]
+  pub fn new(
+    width: u32,
+    height: u32,
+  ) -> Self {
+    let mut s = Self([0; 8]);
+    s.set_width(width);
+    s.set_height(height);
+    s
+  }
+
+  pub fn width(&self) -> u32 {
+    let mut mem = core::mem::MaybeUninit::<<u32 as EndianScalar>::Scalar>::uninit();
+    // Safety:
+    // Created from a valid Table for this object
+    // Which contains a valid value in this slot
+    EndianScalar::from_little_endian(unsafe {
+      core::ptr::copy_nonoverlapping(
+        self.0[0..].as_ptr(),
+        mem.as_mut_ptr() as *mut u8,
+        core::mem::size_of::<<u32 as EndianScalar>::Scalar>(),
+      );
+      mem.assume_init()
+    })
+  }
+
+  pub fn set_width(&mut self, x: u32) {
+    let x_le = x.to_little_endian();
+    // Safety:
+    // Created from a valid Table for this object
+    // Which contains a valid value in this slot
+    unsafe {
+      core::ptr::copy_nonoverlapping(
+        &x_le as *const _ as *const u8,
+        self.0[0..].as_mut_ptr(),
+        core::mem::size_of::<<u32 as EndianScalar>::Scalar>(),
+      );
     }
   }
-  #[inline]
-  pub fn finish(self) -> flatbuffers::WIPOffset<EmptyTable<'a>> {
-    let o = self.fbb_.end_table(self.start_);
-    flatbuffers::WIPOffset::new(o.value())
+
+  pub fn height(&self) -> u32 {
+    let mut mem = core::mem::MaybeUninit::<<u32 as EndianScalar>::Scalar>::uninit();
+    // Safety:
+    // Created from a valid Table for this object
+    // Which contains a valid value in this slot
+    EndianScalar::from_little_endian(unsafe {
+      core::ptr::copy_nonoverlapping(
+        self.0[4..].as_ptr(),
+        mem.as_mut_ptr() as *mut u8,
+        core::mem::size_of::<<u32 as EndianScalar>::Scalar>(),
+      );
+      mem.assume_init()
+    })
+  }
+
+  pub fn set_height(&mut self, x: u32) {
+    let x_le = x.to_little_endian();
+    // Safety:
+    // Created from a valid Table for this object
+    // Which contains a valid value in this slot
+    unsafe {
+      core::ptr::copy_nonoverlapping(
+        &x_le as *const _ as *const u8,
+        self.0[4..].as_mut_ptr(),
+        core::mem::size_of::<<u32 as EndianScalar>::Scalar>(),
+      );
+    }
+  }
+
+}
+
+// struct Coord2u, aligned to 4
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq)]
+pub struct Coord2u(pub [u8; 8]);
+impl Default for Coord2u { 
+  fn default() -> Self { 
+    Self([0; 8])
+  }
+}
+impl core::fmt::Debug for Coord2u {
+  fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+    f.debug_struct("Coord2u")
+      .field("x", &self.x())
+      .field("y", &self.y())
+      .finish()
   }
 }
 
-impl core::fmt::Debug for EmptyTable<'_> {
-  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-    let mut ds = f.debug_struct("EmptyTable");
-      ds.finish()
+impl flatbuffers::SimpleToVerifyInSlice for Coord2u {}
+impl<'a> flatbuffers::Follow<'a> for Coord2u {
+  type Inner = &'a Coord2u;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    <&'a Coord2u>::follow(buf, loc)
   }
 }
+impl<'a> flatbuffers::Follow<'a> for &'a Coord2u {
+  type Inner = &'a Coord2u;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    flatbuffers::follow_cast_ref::<Coord2u>(buf, loc)
+  }
+}
+impl<'b> flatbuffers::Push for Coord2u {
+    type Output = Coord2u;
+    #[inline]
+    unsafe fn push(&self, dst: &mut [u8], _written_len: usize) {
+        let src = ::core::slice::from_raw_parts(self as *const Coord2u as *const u8, Self::size());
+        dst.copy_from_slice(src);
+    }
+}
+
+impl<'a> flatbuffers::Verifiable for Coord2u {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.in_buffer::<Self>(pos)
+  }
+}
+
+impl<'a> Coord2u {
+  #[allow(clippy::too_many_arguments)]
+  pub fn new(
+    x: u32,
+    y: u32,
+  ) -> Self {
+    let mut s = Self([0; 8]);
+    s.set_x(x);
+    s.set_y(y);
+    s
+  }
+
+  pub fn x(&self) -> u32 {
+    let mut mem = core::mem::MaybeUninit::<<u32 as EndianScalar>::Scalar>::uninit();
+    // Safety:
+    // Created from a valid Table for this object
+    // Which contains a valid value in this slot
+    EndianScalar::from_little_endian(unsafe {
+      core::ptr::copy_nonoverlapping(
+        self.0[0..].as_ptr(),
+        mem.as_mut_ptr() as *mut u8,
+        core::mem::size_of::<<u32 as EndianScalar>::Scalar>(),
+      );
+      mem.assume_init()
+    })
+  }
+
+  pub fn set_x(&mut self, x: u32) {
+    let x_le = x.to_little_endian();
+    // Safety:
+    // Created from a valid Table for this object
+    // Which contains a valid value in this slot
+    unsafe {
+      core::ptr::copy_nonoverlapping(
+        &x_le as *const _ as *const u8,
+        self.0[0..].as_mut_ptr(),
+        core::mem::size_of::<<u32 as EndianScalar>::Scalar>(),
+      );
+    }
+  }
+
+  pub fn y(&self) -> u32 {
+    let mut mem = core::mem::MaybeUninit::<<u32 as EndianScalar>::Scalar>::uninit();
+    // Safety:
+    // Created from a valid Table for this object
+    // Which contains a valid value in this slot
+    EndianScalar::from_little_endian(unsafe {
+      core::ptr::copy_nonoverlapping(
+        self.0[4..].as_ptr(),
+        mem.as_mut_ptr() as *mut u8,
+        core::mem::size_of::<<u32 as EndianScalar>::Scalar>(),
+      );
+      mem.assume_init()
+    })
+  }
+
+  pub fn set_y(&mut self, x: u32) {
+    let x_le = x.to_little_endian();
+    // Safety:
+    // Created from a valid Table for this object
+    // Which contains a valid value in this slot
+    unsafe {
+      core::ptr::copy_nonoverlapping(
+        &x_le as *const _ as *const u8,
+        self.0[4..].as_mut_ptr(),
+        core::mem::size_of::<<u32 as EndianScalar>::Scalar>(),
+      );
+    }
+  }
+
+}
+
+// struct Coord2f, aligned to 4
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq)]
+pub struct Coord2f(pub [u8; 8]);
+impl Default for Coord2f { 
+  fn default() -> Self { 
+    Self([0; 8])
+  }
+}
+impl core::fmt::Debug for Coord2f {
+  fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+    f.debug_struct("Coord2f")
+      .field("x", &self.x())
+      .field("y", &self.y())
+      .finish()
+  }
+}
+
+impl flatbuffers::SimpleToVerifyInSlice for Coord2f {}
+impl<'a> flatbuffers::Follow<'a> for Coord2f {
+  type Inner = &'a Coord2f;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    <&'a Coord2f>::follow(buf, loc)
+  }
+}
+impl<'a> flatbuffers::Follow<'a> for &'a Coord2f {
+  type Inner = &'a Coord2f;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    flatbuffers::follow_cast_ref::<Coord2f>(buf, loc)
+  }
+}
+impl<'b> flatbuffers::Push for Coord2f {
+    type Output = Coord2f;
+    #[inline]
+    unsafe fn push(&self, dst: &mut [u8], _written_len: usize) {
+        let src = ::core::slice::from_raw_parts(self as *const Coord2f as *const u8, Self::size());
+        dst.copy_from_slice(src);
+    }
+}
+
+impl<'a> flatbuffers::Verifiable for Coord2f {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.in_buffer::<Self>(pos)
+  }
+}
+
+impl<'a> Coord2f {
+  #[allow(clippy::too_many_arguments)]
+  pub fn new(
+    x: f32,
+    y: f32,
+  ) -> Self {
+    let mut s = Self([0; 8]);
+    s.set_x(x);
+    s.set_y(y);
+    s
+  }
+
+  pub fn x(&self) -> f32 {
+    let mut mem = core::mem::MaybeUninit::<<f32 as EndianScalar>::Scalar>::uninit();
+    // Safety:
+    // Created from a valid Table for this object
+    // Which contains a valid value in this slot
+    EndianScalar::from_little_endian(unsafe {
+      core::ptr::copy_nonoverlapping(
+        self.0[0..].as_ptr(),
+        mem.as_mut_ptr() as *mut u8,
+        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
+      );
+      mem.assume_init()
+    })
+  }
+
+  pub fn set_x(&mut self, x: f32) {
+    let x_le = x.to_little_endian();
+    // Safety:
+    // Created from a valid Table for this object
+    // Which contains a valid value in this slot
+    unsafe {
+      core::ptr::copy_nonoverlapping(
+        &x_le as *const _ as *const u8,
+        self.0[0..].as_mut_ptr(),
+        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
+      );
+    }
+  }
+
+  pub fn y(&self) -> f32 {
+    let mut mem = core::mem::MaybeUninit::<<f32 as EndianScalar>::Scalar>::uninit();
+    // Safety:
+    // Created from a valid Table for this object
+    // Which contains a valid value in this slot
+    EndianScalar::from_little_endian(unsafe {
+      core::ptr::copy_nonoverlapping(
+        self.0[4..].as_ptr(),
+        mem.as_mut_ptr() as *mut u8,
+        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
+      );
+      mem.assume_init()
+    })
+  }
+
+  pub fn set_y(&mut self, x: f32) {
+    let x_le = x.to_little_endian();
+    // Safety:
+    // Created from a valid Table for this object
+    // Which contains a valid value in this slot
+    unsafe {
+      core::ptr::copy_nonoverlapping(
+        &x_le as *const _ as *const u8,
+        self.0[4..].as_mut_ptr(),
+        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
+      );
+    }
+  }
+
+}
+
 pub enum NotifyVideoStartOffset {}
 #[derive(Copy, Clone, PartialEq)]
 
@@ -202,8 +495,7 @@ impl<'a> flatbuffers::Follow<'a> for NotifyVideoStart<'a> {
 }
 
 impl<'a> NotifyVideoStart<'a> {
-  pub const VT_WIDTH: flatbuffers::VOffsetT = 4;
-  pub const VT_HEIGHT: flatbuffers::VOffsetT = 6;
+  pub const VT_RESOLUTION: flatbuffers::VOffsetT = 4;
 
   #[inline]
   pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -212,28 +504,20 @@ impl<'a> NotifyVideoStart<'a> {
   #[allow(unused_mut)]
   pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
     _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
-    args: &'args NotifyVideoStartArgs
+    args: &'args NotifyVideoStartArgs<'args>
   ) -> flatbuffers::WIPOffset<NotifyVideoStart<'bldr>> {
     let mut builder = NotifyVideoStartBuilder::new(_fbb);
-    builder.add_height(args.height);
-    builder.add_width(args.width);
+    if let Some(x) = args.resolution { builder.add_resolution(x); }
     builder.finish()
   }
 
 
   #[inline]
-  pub fn width(&self) -> u32 {
+  pub fn resolution(&self) -> Option<&'a Size2u> {
     // Safety:
     // Created from valid Table for this object
     // which contains a valid value in this slot
-    unsafe { self._tab.get::<u32>(NotifyVideoStart::VT_WIDTH, Some(0)).unwrap()}
-  }
-  #[inline]
-  pub fn height(&self) -> u32 {
-    // Safety:
-    // Created from valid Table for this object
-    // which contains a valid value in this slot
-    unsafe { self._tab.get::<u32>(NotifyVideoStart::VT_HEIGHT, Some(0)).unwrap()}
+    unsafe { self._tab.get::<Size2u>(NotifyVideoStart::VT_RESOLUTION, None)}
   }
 }
 
@@ -244,22 +528,19 @@ impl flatbuffers::Verifiable for NotifyVideoStart<'_> {
   ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
     use self::flatbuffers::Verifiable;
     v.visit_table(pos)?
-     .visit_field::<u32>("width", Self::VT_WIDTH, false)?
-     .visit_field::<u32>("height", Self::VT_HEIGHT, false)?
+     .visit_field::<Size2u>("resolution", Self::VT_RESOLUTION, false)?
      .finish();
     Ok(())
   }
 }
-pub struct NotifyVideoStartArgs {
-    pub width: u32,
-    pub height: u32,
+pub struct NotifyVideoStartArgs<'a> {
+    pub resolution: Option<&'a Size2u>,
 }
-impl<'a> Default for NotifyVideoStartArgs {
+impl<'a> Default for NotifyVideoStartArgs<'a> {
   #[inline]
   fn default() -> Self {
     NotifyVideoStartArgs {
-      width: 0,
-      height: 0,
+      resolution: None,
     }
   }
 }
@@ -270,12 +551,8 @@ pub struct NotifyVideoStartBuilder<'a: 'b, 'b> {
 }
 impl<'a: 'b, 'b> NotifyVideoStartBuilder<'a, 'b> {
   #[inline]
-  pub fn add_width(&mut self, width: u32) {
-    self.fbb_.push_slot::<u32>(NotifyVideoStart::VT_WIDTH, width, 0);
-  }
-  #[inline]
-  pub fn add_height(&mut self, height: u32) {
-    self.fbb_.push_slot::<u32>(NotifyVideoStart::VT_HEIGHT, height, 0);
+  pub fn add_resolution(&mut self, resolution: &Size2u) {
+    self.fbb_.push_slot_always::<&Size2u>(NotifyVideoStart::VT_RESOLUTION, resolution);
   }
   #[inline]
   pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> NotifyVideoStartBuilder<'a, 'b> {
@@ -295,8 +572,7 @@ impl<'a: 'b, 'b> NotifyVideoStartBuilder<'a, 'b> {
 impl core::fmt::Debug for NotifyVideoStart<'_> {
   fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
     let mut ds = f.debug_struct("NotifyVideoStart");
-      ds.field("width", &self.width());
-      ds.field("height", &self.height());
+      ds.field("resolution", &self.resolution());
       ds.finish()
   }
 }
@@ -431,9 +707,8 @@ impl<'a> flatbuffers::Follow<'a> for CursorUpdate<'a> {
 
 impl<'a> CursorUpdate<'a> {
   pub const VT_SHAPE: flatbuffers::VOffsetT = 4;
-  pub const VT_X: flatbuffers::VOffsetT = 6;
-  pub const VT_Y: flatbuffers::VOffsetT = 8;
-  pub const VT_VISIBLE: flatbuffers::VOffsetT = 10;
+  pub const VT_POS: flatbuffers::VOffsetT = 6;
+  pub const VT_VISIBLE: flatbuffers::VOffsetT = 8;
 
   #[inline]
   pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -445,8 +720,7 @@ impl<'a> CursorUpdate<'a> {
     args: &'args CursorUpdateArgs<'args>
   ) -> flatbuffers::WIPOffset<CursorUpdate<'bldr>> {
     let mut builder = CursorUpdateBuilder::new(_fbb);
-    builder.add_y(args.y);
-    builder.add_x(args.x);
+    if let Some(x) = args.pos { builder.add_pos(x); }
     if let Some(x) = args.shape { builder.add_shape(x); }
     builder.add_visible(args.visible);
     builder.finish()
@@ -461,18 +735,11 @@ impl<'a> CursorUpdate<'a> {
     unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<CursorShape>>(CursorUpdate::VT_SHAPE, None)}
   }
   #[inline]
-  pub fn x(&self) -> u32 {
+  pub fn pos(&self) -> Option<&'a Coord2u> {
     // Safety:
     // Created from valid Table for this object
     // which contains a valid value in this slot
-    unsafe { self._tab.get::<u32>(CursorUpdate::VT_X, Some(0)).unwrap()}
-  }
-  #[inline]
-  pub fn y(&self) -> u32 {
-    // Safety:
-    // Created from valid Table for this object
-    // which contains a valid value in this slot
-    unsafe { self._tab.get::<u32>(CursorUpdate::VT_Y, Some(0)).unwrap()}
+    unsafe { self._tab.get::<Coord2u>(CursorUpdate::VT_POS, None)}
   }
   #[inline]
   pub fn visible(&self) -> bool {
@@ -491,8 +758,7 @@ impl flatbuffers::Verifiable for CursorUpdate<'_> {
     use self::flatbuffers::Verifiable;
     v.visit_table(pos)?
      .visit_field::<flatbuffers::ForwardsUOffset<CursorShape>>("shape", Self::VT_SHAPE, false)?
-     .visit_field::<u32>("x", Self::VT_X, false)?
-     .visit_field::<u32>("y", Self::VT_Y, false)?
+     .visit_field::<Coord2u>("pos", Self::VT_POS, false)?
      .visit_field::<bool>("visible", Self::VT_VISIBLE, false)?
      .finish();
     Ok(())
@@ -500,8 +766,7 @@ impl flatbuffers::Verifiable for CursorUpdate<'_> {
 }
 pub struct CursorUpdateArgs<'a> {
     pub shape: Option<flatbuffers::WIPOffset<CursorShape<'a>>>,
-    pub x: u32,
-    pub y: u32,
+    pub pos: Option<&'a Coord2u>,
     pub visible: bool,
 }
 impl<'a> Default for CursorUpdateArgs<'a> {
@@ -509,8 +774,7 @@ impl<'a> Default for CursorUpdateArgs<'a> {
   fn default() -> Self {
     CursorUpdateArgs {
       shape: None,
-      x: 0,
-      y: 0,
+      pos: None,
       visible: false,
     }
   }
@@ -526,12 +790,8 @@ impl<'a: 'b, 'b> CursorUpdateBuilder<'a, 'b> {
     self.fbb_.push_slot_always::<flatbuffers::WIPOffset<CursorShape>>(CursorUpdate::VT_SHAPE, shape);
   }
   #[inline]
-  pub fn add_x(&mut self, x: u32) {
-    self.fbb_.push_slot::<u32>(CursorUpdate::VT_X, x, 0);
-  }
-  #[inline]
-  pub fn add_y(&mut self, y: u32) {
-    self.fbb_.push_slot::<u32>(CursorUpdate::VT_Y, y, 0);
+  pub fn add_pos(&mut self, pos: &Coord2u) {
+    self.fbb_.push_slot_always::<&Coord2u>(CursorUpdate::VT_POS, pos);
   }
   #[inline]
   pub fn add_visible(&mut self, visible: bool) {
@@ -556,8 +816,7 @@ impl core::fmt::Debug for CursorUpdate<'_> {
   fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
     let mut ds = f.debug_struct("CursorUpdate");
       ds.field("shape", &self.shape());
-      ds.field("x", &self.x());
-      ds.field("y", &self.y());
+      ds.field("pos", &self.pos());
       ds.field("visible", &self.visible());
       ds.finish()
   }
@@ -581,10 +840,8 @@ impl<'a> CursorShape<'a> {
   pub const VT_IMAGE: flatbuffers::VOffsetT = 4;
   pub const VT_CODEC: flatbuffers::VOffsetT = 6;
   pub const VT_XOR: flatbuffers::VOffsetT = 8;
-  pub const VT_HOTSPOTX: flatbuffers::VOffsetT = 10;
-  pub const VT_HOTSPOTY: flatbuffers::VOffsetT = 12;
-  pub const VT_WIDTH: flatbuffers::VOffsetT = 14;
-  pub const VT_HEIGHT: flatbuffers::VOffsetT = 16;
+  pub const VT_HOTSPOT: flatbuffers::VOffsetT = 10;
+  pub const VT_RESOLUTION: flatbuffers::VOffsetT = 12;
 
   #[inline]
   pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -596,10 +853,8 @@ impl<'a> CursorShape<'a> {
     args: &'args CursorShapeArgs<'args>
   ) -> flatbuffers::WIPOffset<CursorShape<'bldr>> {
     let mut builder = CursorShapeBuilder::new(_fbb);
-    builder.add_height(args.height);
-    builder.add_width(args.width);
-    builder.add_hotspoty(args.hotspoty);
-    builder.add_hotspotx(args.hotspotx);
+    if let Some(x) = args.resolution { builder.add_resolution(x); }
+    if let Some(x) = args.hotspot { builder.add_hotspot(x); }
     if let Some(x) = args.image { builder.add_image(x); }
     builder.add_xor(args.xor);
     builder.add_codec(args.codec);
@@ -629,32 +884,18 @@ impl<'a> CursorShape<'a> {
     unsafe { self._tab.get::<bool>(CursorShape::VT_XOR, Some(false)).unwrap()}
   }
   #[inline]
-  pub fn hotspotx(&self) -> f32 {
+  pub fn hotspot(&self) -> Option<&'a Coord2f> {
     // Safety:
     // Created from valid Table for this object
     // which contains a valid value in this slot
-    unsafe { self._tab.get::<f32>(CursorShape::VT_HOTSPOTX, Some(0.0)).unwrap()}
+    unsafe { self._tab.get::<Coord2f>(CursorShape::VT_HOTSPOT, None)}
   }
   #[inline]
-  pub fn hotspoty(&self) -> f32 {
+  pub fn resolution(&self) -> Option<&'a Size2u> {
     // Safety:
     // Created from valid Table for this object
     // which contains a valid value in this slot
-    unsafe { self._tab.get::<f32>(CursorShape::VT_HOTSPOTY, Some(0.0)).unwrap()}
-  }
-  #[inline]
-  pub fn width(&self) -> u32 {
-    // Safety:
-    // Created from valid Table for this object
-    // which contains a valid value in this slot
-    unsafe { self._tab.get::<u32>(CursorShape::VT_WIDTH, Some(0)).unwrap()}
-  }
-  #[inline]
-  pub fn height(&self) -> u32 {
-    // Safety:
-    // Created from valid Table for this object
-    // which contains a valid value in this slot
-    unsafe { self._tab.get::<u32>(CursorShape::VT_HEIGHT, Some(0)).unwrap()}
+    unsafe { self._tab.get::<Size2u>(CursorShape::VT_RESOLUTION, None)}
   }
 }
 
@@ -668,10 +909,8 @@ impl flatbuffers::Verifiable for CursorShape<'_> {
      .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>("image", Self::VT_IMAGE, false)?
      .visit_field::<VideoCodec>("codec", Self::VT_CODEC, false)?
      .visit_field::<bool>("xor", Self::VT_XOR, false)?
-     .visit_field::<f32>("hotspotx", Self::VT_HOTSPOTX, false)?
-     .visit_field::<f32>("hotspoty", Self::VT_HOTSPOTY, false)?
-     .visit_field::<u32>("width", Self::VT_WIDTH, false)?
-     .visit_field::<u32>("height", Self::VT_HEIGHT, false)?
+     .visit_field::<Coord2f>("hotspot", Self::VT_HOTSPOT, false)?
+     .visit_field::<Size2u>("resolution", Self::VT_RESOLUTION, false)?
      .finish();
     Ok(())
   }
@@ -680,10 +919,8 @@ pub struct CursorShapeArgs<'a> {
     pub image: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
     pub codec: VideoCodec,
     pub xor: bool,
-    pub hotspotx: f32,
-    pub hotspoty: f32,
-    pub width: u32,
-    pub height: u32,
+    pub hotspot: Option<&'a Coord2f>,
+    pub resolution: Option<&'a Size2u>,
 }
 impl<'a> Default for CursorShapeArgs<'a> {
   #[inline]
@@ -692,10 +929,8 @@ impl<'a> Default for CursorShapeArgs<'a> {
       image: None,
       codec: VideoCodec::Empty,
       xor: false,
-      hotspotx: 0.0,
-      hotspoty: 0.0,
-      width: 0,
-      height: 0,
+      hotspot: None,
+      resolution: None,
     }
   }
 }
@@ -718,20 +953,12 @@ impl<'a: 'b, 'b> CursorShapeBuilder<'a, 'b> {
     self.fbb_.push_slot::<bool>(CursorShape::VT_XOR, xor, false);
   }
   #[inline]
-  pub fn add_hotspotx(&mut self, hotspotx: f32) {
-    self.fbb_.push_slot::<f32>(CursorShape::VT_HOTSPOTX, hotspotx, 0.0);
+  pub fn add_hotspot(&mut self, hotspot: &Coord2f) {
+    self.fbb_.push_slot_always::<&Coord2f>(CursorShape::VT_HOTSPOT, hotspot);
   }
   #[inline]
-  pub fn add_hotspoty(&mut self, hotspoty: f32) {
-    self.fbb_.push_slot::<f32>(CursorShape::VT_HOTSPOTY, hotspoty, 0.0);
-  }
-  #[inline]
-  pub fn add_width(&mut self, width: u32) {
-    self.fbb_.push_slot::<u32>(CursorShape::VT_WIDTH, width, 0);
-  }
-  #[inline]
-  pub fn add_height(&mut self, height: u32) {
-    self.fbb_.push_slot::<u32>(CursorShape::VT_HEIGHT, height, 0);
+  pub fn add_resolution(&mut self, resolution: &Size2u) {
+    self.fbb_.push_slot_always::<&Size2u>(CursorShape::VT_RESOLUTION, resolution);
   }
   #[inline]
   pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> CursorShapeBuilder<'a, 'b> {
@@ -754,10 +981,8 @@ impl core::fmt::Debug for CursorShape<'_> {
       ds.field("image", &self.image());
       ds.field("codec", &self.codec());
       ds.field("xor", &self.xor());
-      ds.field("hotspotx", &self.hotspotx());
-      ds.field("hotspoty", &self.hotspoty());
-      ds.field("width", &self.width());
-      ds.field("height", &self.height());
+      ds.field("hotspot", &self.hotspot());
+      ds.field("resolution", &self.resolution());
       ds.finish()
   }
 }

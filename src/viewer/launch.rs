@@ -1,4 +1,6 @@
 use crate::image::{ColorFormat, ImageBuf};
+use crate::network::util::recv_msg;
+use crate::schema::video::{NotifyVideoStart, VideoFrame};
 use crate::viewer::display_state::DisplayState;
 use anyhow::Result;
 use std::future::Future;
@@ -19,18 +21,27 @@ fn eval_local_future<F: Future>(future: F) -> F::Output {
 }
 
 async fn receiver(tx: tokio::sync::mpsc::Sender<ImageBuf>) -> Result<u64> {
+    let mut buffer = vec![0u8; 2 * 1024 * 1024];
+
     let mut frames = 0;
     let mut stream = tokio::net::TcpStream::connect((Ipv4Addr::new(127, 0, 0, 1), 6495)).await?;
     println!("Connected to {}", stream.peer_addr().unwrap());
 
     stream.set_nodelay(true)?;
-    let w = stream.read_u32_le().await?;
-    let h = stream.read_u32_le().await?;
+
+    let msg: NotifyVideoStart = recv_msg(&mut buffer, &mut stream).await?;
+    let w = msg.resolution().map(|x| x.width()).unwrap_or_default();
+    let h = msg.resolution().map(|x| x.height()).unwrap_or_default();
     println!("Receiving {w}x{h} image");
 
     loop {
         let mut img = ImageBuf::alloc(w, h, ColorFormat::Bgra8888);
+
+        let frame: VideoFrame = recv_msg(&mut buffer, &mut stream).await?;
+        assert_eq!(frame.video_bytes(), img.data.len() as u64);
+
         stream.read_exact(&mut img.data).await?;
+
         if tx.send(img).await.is_err() {
             break;
         }

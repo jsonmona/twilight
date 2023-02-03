@@ -1,6 +1,9 @@
+use crate::network::util::send_msg_with;
 use crate::platform::win32::capture_gdi::CaptureGdi;
+use crate::schema::video::{NotifyVideoStart, NotifyVideoStartArgs, Size2u, VideoFrame, VideoFrameArgs};
+use flatbuffers::FlatBufferBuilder;
 use std::time::{Duration, Instant};
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncWriteExt, BufStream};
 
 pub fn serve() -> anyhow::Result<()> {
     let rt_local = tokio::runtime::Builder::new_current_thread()
@@ -14,18 +17,29 @@ pub fn serve() -> anyhow::Result<()> {
 }
 
 async fn serve_inner() -> anyhow::Result<()> {
+    let mut builder = FlatBufferBuilder::with_capacity(2 * 1024 * 1024);
+
     let mut capture = CaptureGdi::new().unwrap();
     let listener =
         tokio::net::TcpListener::bind((std::net::Ipv4Addr::new(127, 0, 0, 1), 6495)).await?;
 
-    let (mut stream, client_addr) = listener.accept().await?;
+    let (stream, client_addr) = listener.accept().await?;
     println!("Connected to {client_addr}");
 
     stream.set_nodelay(true)?;
+    let mut stream = BufStream::new(stream);
 
     let (w, h) = capture.resolution();
-    stream.write_all(&w.to_le_bytes()).await?;
-    stream.write_all(&h.to_le_bytes()).await?;
+    send_msg_with(&mut stream, &mut builder, |builder| {
+        NotifyVideoStart::create(
+            builder,
+            &NotifyVideoStartArgs {
+                resolution: Some(&Size2u::new(w, h)),
+            },
+        )
+    })
+    .await?;
+    stream.flush().await?;
 
     let mut log_time = Instant::now();
     let mut frames = 0;
@@ -40,6 +54,13 @@ async fn serve_inner() -> anyhow::Result<()> {
         anyhow::ensure!(img.width == w);
         anyhow::ensure!(img.height == h);
 
+        let video_bytes = img.data.len().try_into()?;
+        send_msg_with(&mut stream, &mut builder, |builder| {
+            VideoFrame::create(builder, &VideoFrameArgs {
+                video_bytes,
+                cursor_update: None,
+            })
+        }).await?;
         stream.write_all(img.data).await?;
         let write_time = Instant::now();
 
