@@ -18,8 +18,15 @@ impl DisplayState {
     pub async fn new(window: &Window) -> Result<Self> {
         let size = window.inner_size();
 
+        // Use DX12 on windows (due to swapchain issue on Nvidia optimus laptop)
+        let backends = if cfg!(target_os = "windows") {
+            wgpu::Backends::DX12
+        } else {
+            wgpu::Backends::PRIMARY
+        };
+
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::PRIMARY,
+            backends,
             dx12_shader_compiler: wgpu::Dx12Compiler::Fxc,
         });
 

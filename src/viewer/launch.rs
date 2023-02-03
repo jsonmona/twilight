@@ -5,6 +5,8 @@ use crate::viewer::display_state::DisplayState;
 use anyhow::Result;
 use std::future::Future;
 use std::net::Ipv4Addr;
+use std::ops::Add;
+use std::time::Duration;
 use tokio::io::AsyncReadExt;
 use winit::event;
 use winit::event::{Event, WindowEvent};
@@ -77,18 +79,23 @@ pub fn launch() -> ! {
             }
         }
         Event::MainEventsCleared => {
-            //TODO: Is it better to redraw on requests?
-            // See https://docs.rs/winit/latest/winit/event_loop/enum.ControlFlow.html#variant.WaitUntil
+            *control_flow = ControlFlow::Poll;
+
             let rx = rx.as_mut().unwrap();
-            let img = rx.blocking_recv().unwrap();
+            if let Ok(img) = rx.try_recv() {
+                let state = state_box.as_mut().unwrap();
+                state.update(img);
+                window.request_redraw();
+            }
+        }
+        Event::RedrawRequested(_) => {
             let state = state_box.as_mut().unwrap();
-            state.update(img);
             match state.render() {
                 Ok(_) => {}
                 Err(wgpu::SurfaceError::Lost) => state.reconfigure_surface(),
                 Err(wgpu::SurfaceError::OutOfMemory) => {
                     eprintln!("{:?}", wgpu::SurfaceError::OutOfMemory);
-                    *control_flow = ControlFlow::Exit;
+                    *control_flow = ControlFlow::ExitWithCode(1);
                 }
                 Err(e) => eprintln!("{e:?}"),
             }
