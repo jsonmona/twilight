@@ -3,11 +3,8 @@ use crate::network::util::recv_msg;
 use crate::schema::video::{NotifyVideoStart, VideoFrame};
 use crate::viewer::display_state::DisplayState;
 use anyhow::Result;
-use std::future::Future;
-use std::net::Ipv4Addr;
-use std::ops::Add;
-use std::time::Duration;
 use cfg_if::cfg_if;
+use std::net::Ipv4Addr;
 use tokio::io::AsyncReadExt;
 use winit::event;
 use winit::event::{Event, WindowEvent};
@@ -26,10 +23,12 @@ async fn receiver(tx: tokio::sync::mpsc::Sender<ImageBuf>) -> Result<u64> {
     let msg: NotifyVideoStart = recv_msg(&mut buffer, &mut stream).await?;
     let w = msg.resolution().map(|x| x.width()).unwrap_or_default();
     let h = msg.resolution().map(|x| x.height()).unwrap_or_default();
+    let format =
+        ColorFormat::from_video_codec(msg.desktop_codec()).expect("requires uncompressed format");
     println!("Receiving {w}x{h} image");
 
     loop {
-        let mut img = ImageBuf::alloc(w, h, ColorFormat::Bgra8888);
+        let mut img = ImageBuf::alloc(w, h, None, format);
 
         let frame: VideoFrame = recv_msg(&mut buffer, &mut stream).await?;
         assert_eq!(frame.video_bytes(), img.data.len() as u64);

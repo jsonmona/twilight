@@ -496,6 +496,7 @@ impl<'a> flatbuffers::Follow<'a> for NotifyVideoStart<'a> {
 
 impl<'a> NotifyVideoStart<'a> {
   pub const VT_RESOLUTION: flatbuffers::VOffsetT = 4;
+  pub const VT_DESKTOP_CODEC: flatbuffers::VOffsetT = 6;
 
   #[inline]
   pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -508,6 +509,7 @@ impl<'a> NotifyVideoStart<'a> {
   ) -> flatbuffers::WIPOffset<NotifyVideoStart<'bldr>> {
     let mut builder = NotifyVideoStartBuilder::new(_fbb);
     if let Some(x) = args.resolution { builder.add_resolution(x); }
+    builder.add_desktop_codec(args.desktop_codec);
     builder.finish()
   }
 
@@ -519,6 +521,13 @@ impl<'a> NotifyVideoStart<'a> {
     // which contains a valid value in this slot
     unsafe { self._tab.get::<Size2u>(NotifyVideoStart::VT_RESOLUTION, None)}
   }
+  #[inline]
+  pub fn desktop_codec(&self) -> VideoCodec {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<VideoCodec>(NotifyVideoStart::VT_DESKTOP_CODEC, Some(VideoCodec::Empty)).unwrap()}
+  }
 }
 
 impl flatbuffers::Verifiable for NotifyVideoStart<'_> {
@@ -529,18 +538,21 @@ impl flatbuffers::Verifiable for NotifyVideoStart<'_> {
     use self::flatbuffers::Verifiable;
     v.visit_table(pos)?
      .visit_field::<Size2u>("resolution", Self::VT_RESOLUTION, false)?
+     .visit_field::<VideoCodec>("desktop_codec", Self::VT_DESKTOP_CODEC, false)?
      .finish();
     Ok(())
   }
 }
 pub struct NotifyVideoStartArgs<'a> {
     pub resolution: Option<&'a Size2u>,
+    pub desktop_codec: VideoCodec,
 }
 impl<'a> Default for NotifyVideoStartArgs<'a> {
   #[inline]
   fn default() -> Self {
     NotifyVideoStartArgs {
       resolution: None,
+      desktop_codec: VideoCodec::Empty,
     }
   }
 }
@@ -553,6 +565,10 @@ impl<'a: 'b, 'b> NotifyVideoStartBuilder<'a, 'b> {
   #[inline]
   pub fn add_resolution(&mut self, resolution: &Size2u) {
     self.fbb_.push_slot_always::<&Size2u>(NotifyVideoStart::VT_RESOLUTION, resolution);
+  }
+  #[inline]
+  pub fn add_desktop_codec(&mut self, desktop_codec: VideoCodec) {
+    self.fbb_.push_slot::<VideoCodec>(NotifyVideoStart::VT_DESKTOP_CODEC, desktop_codec, VideoCodec::Empty);
   }
   #[inline]
   pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> NotifyVideoStartBuilder<'a, 'b> {
@@ -573,6 +589,7 @@ impl core::fmt::Debug for NotifyVideoStart<'_> {
   fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
     let mut ds = f.debug_struct("NotifyVideoStart");
       ds.field("resolution", &self.resolution());
+      ds.field("desktop_codec", &self.desktop_codec());
       ds.finish()
   }
 }

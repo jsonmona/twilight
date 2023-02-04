@@ -1,4 +1,4 @@
-use crate::image::ImageBuf;
+use crate::image::{convert_color, ColorFormat, ImageBuf};
 use std::sync::Mutex;
 use wgpu::{BindGroup, CommandEncoder, Device, Queue, SurfaceConfiguration, Texture, TextureView};
 
@@ -164,9 +164,18 @@ impl DesktopDisplayState {
         {
             let mut next_img = self.next_img.lock().unwrap();
             if let Some(img) = next_img.take() {
+                let real_img = if img.color_format == ColorFormat::Bgra8888 {
+                    img
+                } else {
+                    let mut copy_img =
+                        ImageBuf::alloc(img.width, img.height, None, ColorFormat::Bgra8888);
+                    convert_color(&img, &mut copy_img);
+                    copy_img
+                };
+
                 let desktop_size = wgpu::Extent3d {
-                    width: img.width,
-                    height: img.height,
+                    width: real_img.width,
+                    height: real_img.height,
                     depth_or_array_layers: 1,
                 };
 
@@ -177,11 +186,11 @@ impl DesktopDisplayState {
                         origin: wgpu::Origin3d::ZERO,
                         aspect: wgpu::TextureAspect::All,
                     },
-                    &img.data,
+                    &real_img.data,
                     wgpu::ImageDataLayout {
                         offset: 0,
-                        bytes_per_row: Some((img.width * 4).try_into().unwrap()),
-                        rows_per_image: Some(img.height.try_into().unwrap()),
+                        bytes_per_row: Some((real_img.width * 4).try_into().unwrap()),
+                        rows_per_image: Some(real_img.height.try_into().unwrap()),
                     },
                     desktop_size,
                 );

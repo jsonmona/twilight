@@ -1,4 +1,6 @@
-#[derive(Copy, Clone)]
+use crate::schema::video::VideoCodec;
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum ColorFormat {
     // 0xAABBGGRR in little-endian
     Rgba8888,
@@ -11,4 +13,22 @@ pub enum ColorFormat {
 
     // A typical YUV420 format
     Nv12,
+}
+
+impl ColorFormat {
+    pub fn from_video_codec(x: VideoCodec) -> Option<Self> {
+        match x {
+            VideoCodec::Bgra8888 => Some(ColorFormat::Bgra8888),
+            VideoCodec::Rgb24 => Some(ColorFormat::Rgb24),
+            _ => None,
+        }
+    }
+
+    pub fn into_video_codec(self) -> Option<VideoCodec> {
+        match self {
+            ColorFormat::Bgra8888 => Some(VideoCodec::Bgra8888),
+            ColorFormat::Rgb24 => Some(VideoCodec::Rgb24),
+            _ => None,
+        }
+    }
 }

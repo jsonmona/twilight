@@ -1,5 +1,3 @@
-use std::rc::Rc;
-use std::time::Duration;
 use tokio::task::LocalSet;
 
 #[tokio::main]
@@ -13,7 +11,8 @@ async fn main() {
     let client = main_thread.run_until(async move {
         twilight::viewer::launch().await;
     });
-    tokio::join!(client, server);
+    let (_, r) = tokio::join!(client, server);
+    r.unwrap().unwrap();
 
     main_thread.await;
 }

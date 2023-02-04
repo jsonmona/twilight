@@ -1,12 +1,14 @@
-use anyhow::{anyhow, Context, Result};
+use crate::image::{convert_color, ColorFormat, ImageBuf};
 use crate::network::util::send_msg_with;
 use crate::platform::win32::capture_gdi::CaptureGdi;
-use crate::schema::video::{NotifyVideoStart, NotifyVideoStartArgs, Size2u, VideoFrame, VideoFrameArgs};
+use crate::schema::video::{
+    NotifyVideoStart, NotifyVideoStartArgs, Size2u, VideoCodec, VideoFrame, VideoFrameArgs,
+};
+use anyhow::{anyhow, Context, Result};
 use flatbuffers::FlatBufferBuilder;
 use std::time::{Duration, Instant};
 use tokio::io::{AsyncWriteExt, BufStream};
 use tokio::sync::{mpsc, oneshot};
-use crate::image::ImageBuf;
 
 pub async fn serve() -> Result<()> {
     let mut builder = FlatBufferBuilder::with_capacity(2 * 1024 * 1024);
@@ -16,7 +18,9 @@ pub async fn serve() -> Result<()> {
 
     let _capture = tokio::task::spawn_blocking(move || -> Result<()> {
         let mut cap = CaptureGdi::new()?;
-        resolution_tx.send(cap.resolution()).map_err(|_| anyhow!("capture receiver dropped"))?;
+        resolution_tx
+            .send(cap.resolution())
+            .map_err(|_| anyhow!("capture receiver dropped"))?;
 
         let mut log_time = Instant::now();
         let mut accumulated_time = Duration::from_secs(0);
@@ -37,7 +41,7 @@ pub async fn serve() -> Result<()> {
                 accumulated_time = Duration::from_secs(0);
             }
 
-            if let Err(_) = image_tx.blocking_send(img) {
+            if image_tx.blocking_send(img).is_err() {
                 break;
             }
         }
@@ -60,11 +64,14 @@ pub async fn serve() -> Result<()> {
             builder,
             &NotifyVideoStartArgs {
                 resolution: Some(&Size2u::new(w, h)),
+                desktop_codec: VideoCodec::Rgb24,
             },
         )
     })
     .await?;
     stream.flush().await?;
+
+    let mut img_rgb24 = ImageBuf::alloc(w, h, None, ColorFormat::Rgb24);
 
     loop {
         let img = image_rx.recv().await.context("iamge capture stopped")?;
@@ -72,14 +79,20 @@ pub async fn serve() -> Result<()> {
         anyhow::ensure!(img.width == w);
         anyhow::ensure!(img.height == h);
 
-        let video_bytes = img.data.len().try_into()?;
+        convert_color(&img, &mut img_rgb24);
+
+        let video_bytes = img_rgb24.data.len().try_into()?;
         send_msg_with(&mut stream, &mut builder, |builder| {
-            VideoFrame::create(builder, &VideoFrameArgs {
-                video_bytes,
-                cursor_update: None,
-            })
-        }).await?;
-        stream.write_all(&img.data).await?;
+            VideoFrame::create(
+                builder,
+                &VideoFrameArgs {
+                    video_bytes,
+                    cursor_update: None,
+                },
+            )
+        })
+        .await?;
+        stream.write_all(&img_rgb24.data).await?;
         stream.flush().await?;
     }
 }

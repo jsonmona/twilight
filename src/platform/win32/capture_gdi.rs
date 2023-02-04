@@ -111,6 +111,7 @@ impl CaptureGdi {
             color_format: ColorFormat::Bgra8888,
             width: self.width,
             height: self.height,
+            stride: self.width * 4,
             data: slice,
         })
     }

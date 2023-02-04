@@ -23,6 +23,7 @@ struct Coord2f {
 
 table NotifyVideoStart {
   resolution:Size2u;
+  desktop_codec:VideoCodec;
 }
 
 table VideoFrame {
