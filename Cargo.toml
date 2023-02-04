@@ -12,6 +12,8 @@ winit = "0.27.5"
 wgpu = "0.15.0"
 env_logger = "0.10.0"
 flatbuffers = "23.1.21"
+pollster = "0.2.5"
+cfg-if = "1.0.0"
 
 [dependencies.windows]
 version = "0.43.0"

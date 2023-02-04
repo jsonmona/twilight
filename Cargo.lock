@@ -1126,6 +1126,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "pollster"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5da3b0203fd7ee5720aa0b5e790b591aa5d3f41c3ed2c34a3a393382198af2f7"
+
+[[package]]
 name = "proc-macro-crate"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1521,8 +1527,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "capnp",
+ "cfg-if",
  "env_logger",
  "flatbuffers",
+ "pollster",
  "thiserror",
  "tokio",
  "wgpu",

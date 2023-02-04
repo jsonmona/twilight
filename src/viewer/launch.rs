@@ -7,20 +7,12 @@ use std::future::Future;
 use std::net::Ipv4Addr;
 use std::ops::Add;
 use std::time::Duration;
+use cfg_if::cfg_if;
 use tokio::io::AsyncReadExt;
 use winit::event;
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
-
-fn eval_local_future<F: Future>(future: F) -> F::Output {
-    let runtime = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .unwrap();
-    let localset = tokio::task::LocalSet::new();
-    localset.block_on(&runtime, future)
-}
 
 async fn receiver(tx: tokio::sync::mpsc::Sender<ImageBuf>) -> Result<u64> {
     let mut buffer = vec![0u8; 2 * 1024 * 1024];
@@ -54,12 +46,18 @@ async fn receiver(tx: tokio::sync::mpsc::Sender<ImageBuf>) -> Result<u64> {
 }
 
 // must be called from main thread (because EventLoop requires to do so)
-pub fn launch() -> ! {
+pub async fn launch() -> ! {
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
-    let mut state_box = None;
 
-    let rt = tokio::runtime::Runtime::new().unwrap();
+    let mut display_state = None;
+    cfg_if! {
+        if #[cfg(target_family = "wasm")] {
+            // wasm needs real await
+            state_box = Some(DisplayState::new(&window).await.unwrap());
+        }
+    }
+
     let (tx, rx) = tokio::sync::mpsc::channel(1);
     let mut tx = Some(tx);
     let mut rx = Some(rx);
@@ -67,15 +65,14 @@ pub fn launch() -> ! {
 
     event_loop.run(move |event, _, control_flow| match event {
         Event::NewEvents(event::StartCause::Init) => {
-            let _guard = rt.enter();
             let tx = tx.take().unwrap();
             receiver_box = Some(tokio::spawn(receiver(tx)));
         }
         Event::Resumed => {
-            // Initialize graphic state
+            // Initialize graphic state here
             //TODO: What to do when state_box is not none? (relevant on mobile platforms)
-            if state_box.is_none() {
-                state_box = Some(eval_local_future(DisplayState::new(&window)).unwrap());
+            if display_state.is_none() {
+                display_state = Some(pollster::block_on(DisplayState::new(&window)).unwrap());
             }
         }
         Event::MainEventsCleared => {
@@ -83,13 +80,13 @@ pub fn launch() -> ! {
 
             let rx = rx.as_mut().unwrap();
             if let Ok(img) = rx.try_recv() {
-                let state = state_box.as_mut().unwrap();
+                let state = display_state.as_mut().unwrap();
                 state.update(img);
                 window.request_redraw();
             }
         }
         Event::RedrawRequested(_) => {
-            let state = state_box.as_mut().unwrap();
+            let state = display_state.as_mut().unwrap();
             match state.render() {
                 Ok(_) => {}
                 Err(wgpu::SurfaceError::Lost) => state.reconfigure_surface(),
@@ -104,7 +101,7 @@ pub fn launch() -> ! {
             ref event,
             window_id,
         } if window_id == window.id() => {
-            let state = state_box.as_mut().unwrap();
+            let state = display_state.as_mut().unwrap();
             if !state.input(event) {
                 match event {
                     WindowEvent::CloseRequested => {
@@ -123,9 +120,7 @@ pub fn launch() -> ! {
         Event::LoopDestroyed => {
             let mut rx = rx.take().unwrap();
             rx.close();
-            if let Some(x) = receiver_box.take() {
-                println!("{:?}", rt.block_on(x).unwrap());
-            }
+            drop(receiver_box.take());
         }
         _ => {}
     });
