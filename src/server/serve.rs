@@ -2,8 +2,10 @@ use crate::image::{convert_color, ColorFormat, ImageBuf};
 use crate::network::util::send_msg_with;
 use crate::platform::win32::capture_gdi::CaptureGdi;
 use crate::schema::video::{
+    Coord2f, Coord2u, CursorShape, CursorShapeArgs, CursorUpdate, CursorUpdateArgs,
     NotifyVideoStart, NotifyVideoStartArgs, Size2u, VideoCodec, VideoFrame, VideoFrameArgs,
 };
+use crate::util::DesktopUpdate;
 use anyhow::{anyhow, Context, Result};
 use flatbuffers::FlatBufferBuilder;
 use std::time::{Duration, Instant};
@@ -28,7 +30,11 @@ pub async fn serve() -> Result<()> {
 
         loop {
             let old_time = Instant::now();
-            let img = cap.capture()?.copy_data();
+            let desktop = cap.capture()?;
+            let desktop = DesktopUpdate {
+                cursor: desktop.cursor,
+                desktop: desktop.desktop.copy_data(),
+            };
             let now_time = Instant::now();
 
             frames += 1;
@@ -41,7 +47,7 @@ pub async fn serve() -> Result<()> {
                 accumulated_time = Duration::from_secs(0);
             }
 
-            if image_tx.blocking_send(img).is_err() {
+            if image_tx.blocking_send(desktop).is_err() {
                 break;
             }
         }
@@ -74,7 +80,9 @@ pub async fn serve() -> Result<()> {
     let mut img_rgb24 = ImageBuf::alloc(w, h, None, ColorFormat::Rgb24);
 
     loop {
-        let img = image_rx.recv().await.context("iamge capture stopped")?;
+        let update = image_rx.recv().await.context("iamge capture stopped")?;
+        let img = update.desktop;
+        let cursor = update.cursor;
 
         anyhow::ensure!(img.width == w);
         anyhow::ensure!(img.height == h);
@@ -83,11 +91,40 @@ pub async fn serve() -> Result<()> {
 
         let video_bytes = img_rgb24.data.len().try_into()?;
         send_msg_with(&mut stream, &mut builder, |builder| {
+            let cursor_update = cursor.map(|cursor_state| {
+                let shape = cursor_state.shape.map(|cursor_shape| {
+                    let image = Some(builder.create_vector(&cursor_shape.image.data));
+
+                    CursorShape::create(
+                        builder,
+                        &CursorShapeArgs {
+                            image,
+                            codec: VideoCodec::Bgra8888,
+                            xor: false,
+                            hotspot: Some(&Coord2f::new(0.0, 0.0)),
+                            resolution: Some(&Size2u::new(
+                                cursor_shape.image.width,
+                                cursor_shape.image.height,
+                            )),
+                        },
+                    )
+                });
+
+                CursorUpdate::create(
+                    builder,
+                    &CursorUpdateArgs {
+                        shape,
+                        pos: Some(&Coord2u::new(cursor_state.pos_x, cursor_state.pos_y)),
+                        visible: cursor_state.visible,
+                    },
+                )
+            });
+
             VideoFrame::create(
                 builder,
                 &VideoFrameArgs {
                     video_bytes,
-                    cursor_update: None,
+                    cursor_update,
                 },
             )
         })

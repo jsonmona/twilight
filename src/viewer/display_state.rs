@@ -1,4 +1,5 @@
 use crate::image::ImageBuf;
+use crate::util::DesktopUpdate;
 use crate::viewer::desktop_display_state::DesktopDisplayState;
 use anyhow::{ensure, Context, Result};
 use winit::event::WindowEvent;
@@ -95,11 +96,12 @@ impl DisplayState {
         false
     }
 
-    pub fn update(&mut self, img: ImageBuf) {
+    pub fn update(&mut self, update: DesktopUpdate<ImageBuf>) {
         match self.desktop_display.as_mut() {
-            Some(x) => x.update(img),
+            Some(x) => x.update(update),
             None => {
-                let created = DesktopDisplayState::new(&self.device, &self.surface_config, img);
+                //FIXME: Use cursor info in constructor
+                let created = DesktopDisplayState::new(&self.device, &self.surface_config, update);
                 self.desktop_display = Some(created);
             }
         }

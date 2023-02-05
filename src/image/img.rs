@@ -1,4 +1,5 @@
 use crate::image::ColorFormat;
+use std::fmt::{Debug, Formatter};
 use std::ops::Deref;
 
 pub struct Image<D: Deref<Target = [u8]>> {
@@ -10,6 +11,21 @@ pub struct Image<D: Deref<Target = [u8]>> {
 }
 
 pub type ImageBuf = Image<Vec<u8>>;
+
+impl<D> Debug for Image<D>
+where
+    D: Deref<Target = [u8]>,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Image")
+            .field("width", &self.width)
+            .field("height", &self.height)
+            .field("stride", &self.stride)
+            .field("color_format", &self.color_format)
+            .field("data", &self.data.as_ptr())
+            .finish()
+    }
+}
 
 impl<D> Clone for Image<D>
 where

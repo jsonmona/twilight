@@ -1,6 +1,7 @@
-use crate::image::{ColorFormat, ImageBuf};
+use crate::image::{ColorFormat, Image, ImageBuf};
 use crate::network::util::recv_msg;
 use crate::schema::video::{NotifyVideoStart, VideoFrame};
+use crate::util::{CursorShape, CursorState, DesktopUpdate};
 use crate::viewer::display_state::DisplayState;
 use anyhow::Result;
 use cfg_if::cfg_if;
@@ -11,7 +12,7 @@ use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
 
-async fn receiver(tx: tokio::sync::mpsc::Sender<ImageBuf>) -> Result<u64> {
+async fn receiver(tx: tokio::sync::mpsc::Sender<DesktopUpdate<ImageBuf>>) -> Result<u64> {
     let mut buffer = vec![0u8; 2 * 1024 * 1024];
 
     let mut frames = 0;
@@ -35,7 +36,26 @@ async fn receiver(tx: tokio::sync::mpsc::Sender<ImageBuf>) -> Result<u64> {
 
         stream.read_exact(&mut img.data).await?;
 
-        if tx.send(img).await.is_err() {
+        let update = DesktopUpdate {
+            cursor: frame.cursor_update().map(|u| CursorState {
+                visible: u.visible(),
+                pos_x: u.pos().map(|c| c.x()).unwrap_or_default(),
+                pos_y: u.pos().map(|c| c.y()).unwrap_or_default(),
+                shape: u.shape().and_then(|s| {
+                    let w = s.resolution()?.width();
+                    let h = s.resolution()?.height();
+                    let img = Vec::from(s.image()?.bytes());
+                    Some(CursorShape {
+                        image: Image::new(w, h, w * 4, ColorFormat::Bgra8888, img),
+                        hotspot_x: 0.0,
+                        hotspot_y: 0.0,
+                    })
+                }),
+            }),
+            desktop: img,
+        };
+
+        if tx.send(update).await.is_err() {
             break;
         }
         frames += 1;
@@ -78,9 +98,9 @@ pub async fn launch() -> ! {
             *control_flow = ControlFlow::Poll;
 
             let rx = rx.as_mut().unwrap();
-            if let Ok(img) = rx.try_recv() {
+            if let Ok(update) = rx.try_recv() {
                 let state = display_state.as_mut().unwrap();
-                state.update(img);
+                state.update(update);
                 window.request_redraw();
             }
         }

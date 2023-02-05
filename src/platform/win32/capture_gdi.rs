@@ -1,5 +1,8 @@
-use crate::image::{ColorFormat, Image};
+use crate::image::{ColorFormat, Image, ImageBuf};
+use crate::util::{CursorShape, CursorState, DesktopUpdate};
 use anyhow::{ensure, Result};
+use std::ffi::c_void;
+use std::mem::{size_of, zeroed};
 use windows::Win32::Foundation::*;
 use windows::Win32::Graphics::Gdi::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
@@ -16,6 +19,7 @@ pub struct CaptureGdi {
     bitmap: HBITMAP,
     bitmap_data: *mut u8,
     old_bitmap: HGDIOBJ,
+    last_cursor: HCURSOR,
 }
 
 impl CaptureGdi {
@@ -78,12 +82,15 @@ impl CaptureGdi {
                 bitmap,
                 bitmap_data: bitmap_data as *mut u8,
                 old_bitmap,
+                last_cursor: HCURSOR(0),
             })
         }
     }
 
-    pub fn capture(&mut self) -> Result<Image<&[u8]>> {
+    pub fn capture(&mut self) -> Result<DesktopUpdate<Image<&[u8]>>> {
         assert!(self.is_open, "tried to capture from closed CaptureGdi");
+
+        let cursor_state;
 
         let slice = unsafe {
             // SAFETY: FFI
@@ -100,6 +107,48 @@ impl CaptureGdi {
             );
             ensure!(ret.as_bool(), "failed to BitBlt");
 
+            // Similar code in OBS: https://github.com/obsproject/obs-studio/blob/2ff210acfdf9f72ee6c845c9eacceae1886c275f/plugins/win-capture/cursor-capture.c#L201
+            let mut cursor_info: CURSORINFO = zeroed();
+            cursor_info.cbSize = size_of::<CURSORINFO>() as u32;
+            let ret = GetCursorInfo(&mut cursor_info);
+
+            cursor_state = if ret.as_bool() {
+                // only when GetCursorInfo succeeded
+
+                let shape = if self.last_cursor != cursor_info.hCursor {
+                    self.last_cursor = cursor_info.hCursor;
+
+                    let mut iconinfo = zeroed();
+                    let ret = GetIconInfo(cursor_info.hCursor, &mut iconinfo);
+                    if ret.as_bool() {
+                        let cursor = get_cursor_color(&iconinfo)
+                            .or_else(|| get_cursor_monochrome(&iconinfo));
+
+                        DeleteObject(iconinfo.hbmMask);
+                        DeleteObject(iconinfo.hbmColor);
+
+                        cursor.map(|image| CursorShape {
+                            image,
+                            hotspot_x: 0.0,
+                            hotspot_y: 0.0,
+                        })
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+
+                Some(CursorState {
+                    visible: (cursor_info.flags.0 & CURSOR_SHOWING.0) != 0,
+                    pos_x: cursor_info.ptScreenPos.x as u32,
+                    pos_y: cursor_info.ptScreenPos.y as u32,
+                    shape,
+                })
+            } else {
+                None
+            };
+
             let ret = GdiFlush();
             ensure!(ret.as_bool(), "failed to flush gdi");
 
@@ -107,12 +156,15 @@ impl CaptureGdi {
             std::slice::from_raw_parts(self.bitmap_data, bytes)
         };
 
-        Ok(Image {
-            color_format: ColorFormat::Bgra8888,
-            width: self.width,
-            height: self.height,
-            stride: self.width * 4,
-            data: slice,
+        Ok(DesktopUpdate {
+            cursor: cursor_state,
+            desktop: Image {
+                color_format: ColorFormat::Bgra8888,
+                width: self.width,
+                height: self.height,
+                stride: self.width * 4,
+                data: slice,
+            },
         })
     }
 
@@ -133,4 +185,113 @@ impl Drop for CaptureGdi {
             DeleteDC(self.memdc);
         }
     }
+}
+
+unsafe fn get_bitmap_data(hbmp: HBITMAP) -> Option<(BITMAP, Vec<u8>)> {
+    let mut bmp: BITMAP = zeroed();
+    let ret = GetObjectW(
+        hbmp,
+        size_of::<BITMAP>() as i32,
+        Some(&mut bmp as *mut BITMAP as *mut c_void),
+    );
+    if ret != 0 {
+        let size = bmp.bmHeight * bmp.bmWidthBytes;
+        let mut buf = vec![0u8; size as usize];
+
+        let ret = GetBitmapBits(hbmp, size, buf.as_mut_ptr() as *mut c_void);
+
+        if ret != 0 {
+            Some((bmp, buf))
+        } else {
+            None
+        }
+    } else {
+        None
+    }
+}
+
+unsafe fn get_cursor_color(iconinfo: &ICONINFO) -> Option<ImageBuf> {
+    let (bmp_color, mut color) = get_bitmap_data(iconinfo.hbmColor)?;
+
+    if bmp_color.bmBitsPixel < 32 {
+        return None;
+    }
+
+    if let Some((bmp_mask, mask)) = get_bitmap_data(iconinfo.hbmMask) {
+        let bitmap_has_alpha = color.iter().skip(3).step_by(4).any(|&alpha| alpha != 0);
+
+        if !bitmap_has_alpha {
+            let mut mask_values = mask.iter().copied();
+
+            for y in 0..bmp_mask.bmHeight as usize {
+                let mut step: u8 = 8;
+                let mut val = mask_values.next().unwrap_or(0);
+
+                for x in 0..bmp_mask.bmWidth as usize {
+                    if step == 0 {
+                        step = 8;
+                        val = mask_values.next().unwrap_or(0);
+                    }
+
+                    //TODO: Lift this implicit bound check to outside loop
+                    color[(y * bmp_mask.bmWidth as usize + x) * 4 + 3] =
+                        if val & 0x80 != 0 { 255 } else { 0 };
+                    val <<= 1;
+                    step -= 1;
+                }
+            }
+        }
+    }
+
+    Some(Image::new(
+        bmp_color.bmWidth as u32,
+        bmp_color.bmHeight as u32,
+        bmp_color.bmWidthBytes as u32,
+        ColorFormat::Bgra8888,
+        color,
+    ))
+}
+
+unsafe fn get_cursor_monochrome(iconinfo: &ICONINFO) -> Option<ImageBuf> {
+    let (bmp, mask) = get_bitmap_data(iconinfo.hbmMask)?;
+
+    let height = bmp.bmHeight.unsigned_abs() / 2;
+
+    let pixels = height * bmp.bmWidth as u32;
+
+    let bottom = (bmp.bmWidthBytes as u32 * height) as usize;
+
+    let and_image = &mask[..bottom];
+    let xor_image = &mask[bottom..];
+
+    let mut output = Vec::with_capacity(pixels as usize * 4);
+
+    output.extend(
+        and_image
+            .iter()
+            .copied()
+            .zip(xor_image.iter().copied())
+            .flat_map(|(mut and_mask, mut xor_mask)| {
+                let mut output = [0; 8 * 4];
+                for i in 0..8 {
+                    let and_value = if and_mask & 0x80 != 0 { 255 } else { 0 };
+                    let xor_value = if xor_mask & 0x80 != 0 { 255 } else { 0 };
+                    output[i * 4] = and_value;
+                    output[i * 4 + 1] = and_value;
+                    output[i * 4 + 2] = and_value;
+                    output[i * 4 + 3] = xor_value;
+                    and_mask <<= 1;
+                    xor_mask <<= 1;
+                }
+                output
+            }),
+    );
+
+    Some(Image::new(
+        bmp.bmWidth as u32,
+        height,
+        bmp.bmWidth as u32 * 4,
+        ColorFormat::Bgra8888,
+        output,
+    ))
 }
