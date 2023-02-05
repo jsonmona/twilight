@@ -1,3 +1,5 @@
+use std::future::Future;
+use std::marker::PhantomData;
 use crate::image::{ColorFormat, Image, ImageBuf};
 use crate::network::util::recv_msg;
 use crate::schema::video::{NotifyVideoStart, VideoFrame};
@@ -5,69 +7,38 @@ use crate::util::{CursorShape, CursorState, DesktopUpdate};
 use crate::viewer::display_state::DisplayState;
 use anyhow::Result;
 use cfg_if::cfg_if;
-use std::net::Ipv4Addr;
+use std::net::{IpAddr, Ipv4Addr};
+use std::str::FromStr;
+use std::time::{Duration, Instant};
 use tokio::io::AsyncReadExt;
 use winit::event;
 use winit::event::{Event, WindowEvent};
-use winit::event_loop::{ControlFlow, EventLoop};
+use winit::event_loop::{ControlFlow, EventLoop, EventLoopBuilder};
 use winit::window::WindowBuilder;
+use crate::viewer::client::Client;
+use crate::viewer::desktop_view::DesktopView;
 
-async fn receiver(tx: tokio::sync::mpsc::Sender<DesktopUpdate<ImageBuf>>) -> Result<u64> {
-    let mut buffer = vec![0u8; 2 * 1024 * 1024];
+#[derive(Default)]
+struct NonSend(PhantomData<*const usize>);
 
-    let mut frames = 0;
-    let mut stream = tokio::net::TcpStream::connect((Ipv4Addr::new(127, 0, 0, 1), 6495)).await?;
-    println!("Connected to {}", stream.peer_addr().unwrap());
+// must be called from main thread
+pub async fn launch() -> ! {
+    let _guard: NonSend = Default::default();
 
-    stream.set_nodelay(true)?;
+    launch_inner().await
+}
 
-    let msg: NotifyVideoStart = recv_msg(&mut buffer, &mut stream).await?;
-    let w = msg.resolution().map(|x| x.width()).unwrap_or_default();
-    let h = msg.resolution().map(|x| x.height()).unwrap_or_default();
-    let format =
-        ColorFormat::from_video_codec(msg.desktop_codec()).expect("requires uncompressed format");
-    println!("Receiving {w}x{h} image");
-
-    loop {
-        let mut img = ImageBuf::alloc(w, h, None, format);
-
-        let frame: VideoFrame = recv_msg(&mut buffer, &mut stream).await?;
-        assert_eq!(frame.video_bytes(), img.data.len() as u64);
-
-        stream.read_exact(&mut img.data).await?;
-
-        let update = DesktopUpdate {
-            cursor: frame.cursor_update().map(|u| CursorState {
-                visible: u.visible(),
-                pos_x: u.pos().map(|c| c.x()).unwrap_or_default(),
-                pos_y: u.pos().map(|c| c.y()).unwrap_or_default(),
-                shape: u.shape().and_then(|s| {
-                    let w = s.resolution()?.width();
-                    let h = s.resolution()?.height();
-                    let img = Vec::from(s.image()?.bytes());
-                    Some(CursorShape {
-                        image: Image::new(w, h, w * 4, ColorFormat::Bgra8888, img),
-                        hotspot_x: 0.0,
-                        hotspot_y: 0.0,
-                    })
-                }),
-            }),
-            desktop: img,
-        };
-
-        if tx.send(update).await.is_err() {
-            break;
-        }
-        frames += 1;
-    }
-
-    Ok(frames)
+enum MyEvent {
+    NextUpdate(DesktopUpdate<ImageBuf>),
+    Quit,
 }
 
 // must be called from main thread (because EventLoop requires to do so)
-pub async fn launch() -> ! {
-    let event_loop = EventLoop::new();
+async fn launch_inner() -> ! {
+    let event_loop = EventLoopBuilder::<MyEvent>::with_user_event().build();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
+
+    let proxy = event_loop.create_proxy();
 
     let mut display_state = None;
     cfg_if! {
@@ -77,38 +48,84 @@ pub async fn launch() -> ! {
         }
     }
 
-    let (tx, rx) = tokio::sync::mpsc::channel(1);
-    let mut tx = Some(tx);
-    let mut rx = Some(rx);
-    let mut receiver_box = None;
+    let mut desktop_view: Option<DesktopView> = None;
+
+    let addr = IpAddr::V4(Ipv4Addr::from_str("127.0.0.1").expect("valid ipv4 address"));
+    let mut client = Client::connect_to(addr, None).await.expect("connection error");
+
+    tokio::task::spawn(async move {
+        while client.is_running() {
+            match client.async_recv().await {
+                Some(update) => {
+                    if proxy.send_event(MyEvent::NextUpdate(update)).is_err() {
+                        client.signal_quit();
+                    }
+                },
+                None => {
+                    let _ = proxy.send_event(MyEvent::Quit);
+                    client.signal_quit();
+                },
+            }
+        }
+        client.join().await
+    });
+
+    let mut old_time = Instant::now();
+    let mut frames = 0u32;
 
     event_loop.run(move |event, _, control_flow| match event {
         Event::NewEvents(event::StartCause::Init) => {
-            let tx = tx.take().unwrap();
-            receiver_box = Some(tokio::spawn(receiver(tx)));
         }
         Event::Resumed => {
             // Initialize graphic state here
-            //TODO: What to do when state_box is not none? (relevant on mobile platforms)
+            //TODO: What to do when display_state is not none? (relevant on mobile platforms)
             if display_state.is_none() {
                 display_state = Some(pollster::block_on(DisplayState::new(&window)).unwrap());
             }
         }
         Event::MainEventsCleared => {
-            *control_flow = ControlFlow::Poll;
-
-            let rx = rx.as_mut().unwrap();
-            if let Ok(update) = rx.try_recv() {
-                let state = display_state.as_mut().unwrap();
-                state.update(update);
-                window.request_redraw();
+            *control_flow = ControlFlow::Wait;
+            window.request_redraw();
+        }
+        Event::UserEvent(kind) => {
+            match kind {
+                MyEvent::NextUpdate(update) => {
+                    let state = display_state.as_mut().unwrap();
+                    match desktop_view.as_mut() {
+                        Some(view) => {
+                            view.update(update);
+                        }
+                        None => {
+                            desktop_view = Some(DesktopView::new(state, update));
+                        }
+                    }
+                }
+                MyEvent::Quit => {
+                    *control_flow = ControlFlow::Exit;
+                }
             }
         }
         Event::RedrawRequested(_) => {
+            *control_flow = ControlFlow::Wait;
+
             let state = display_state.as_mut().unwrap();
-            match state.render() {
+            let view = desktop_view.as_mut().unwrap();
+
+            let elapsed = Instant::now() - old_time;
+            if elapsed > Duration::from_secs(10) {
+                let fps = frames as f64 / elapsed.as_secs_f64();
+                println!("Render FPS={fps:.2}");
+                old_time = Instant::now();
+                frames = 0;
+            }
+            frames += 1;
+
+            match view.render(state) {
                 Ok(_) => {}
-                Err(wgpu::SurfaceError::Lost) => state.reconfigure_surface(),
+                Err(wgpu::SurfaceError::Lost) => {
+                    state.reconfigure_surface();
+                    window.request_redraw();
+                },
                 Err(wgpu::SurfaceError::OutOfMemory) => {
                     eprintln!("{:?}", wgpu::SurfaceError::OutOfMemory);
                     *control_flow = ControlFlow::ExitWithCode(1);
@@ -121,26 +138,27 @@ pub async fn launch() -> ! {
             window_id,
         } if window_id == window.id() => {
             let state = display_state.as_mut().unwrap();
-            if !state.input(event) {
-                match event {
-                    WindowEvent::CloseRequested => {
-                        *control_flow = ControlFlow::Exit;
-                    }
-                    WindowEvent::Resized(physical_size) => {
-                        state.resize(*physical_size);
-                    }
-                    WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
-                        state.resize(**new_inner_size);
-                    }
-                    _ => {}
+
+            //TODO: Handle input here
+            //FIXME: Do I need to render here?
+
+            match event {
+                WindowEvent::CloseRequested => {
+                    *control_flow = ControlFlow::Exit;
                 }
+                WindowEvent::Resized(physical_size) => {
+                    state.resize(*physical_size);
+                    window.request_redraw();
+                }
+                WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
+                    state.resize(**new_inner_size);
+                    window.request_redraw();
+                }
+                _ => {}
             }
         }
         Event::LoopDestroyed => {
-            let mut rx = rx.take().unwrap();
-            rx.close();
-            drop(receiver_box.take());
         }
         _ => {}
-    });
+    })
 }

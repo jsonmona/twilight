@@ -3,9 +3,8 @@ use crate::util::DesktopUpdate;
 use bytemuck::{Pod, Zeroable};
 use std::sync::Mutex;
 use wgpu::util::DeviceExt;
-use wgpu::{
-    BindGroup, Buffer, CommandEncoder, Device, Queue, SurfaceConfiguration, Texture, TextureView,
-};
+use wgpu::{BindGroup, Buffer, CommandEncoder, Device, Queue, SurfaceConfiguration, Texture, TextureAspect, TextureView, TextureViewDescriptor};
+use crate::viewer::display_state::DisplayState;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
@@ -17,7 +16,7 @@ struct Uniform {
     _unused: [u32; 2],
 }
 
-pub struct DesktopDisplayState {
+pub struct DesktopView {
     pending_update: Mutex<Option<DesktopUpdate<ImageBuf>>>,
     render_pipeline: wgpu::RenderPipeline,
     uniform_buffer: Buffer,
@@ -26,10 +25,9 @@ pub struct DesktopDisplayState {
     bind_group: BindGroup,
 }
 
-impl DesktopDisplayState {
+impl DesktopView {
     pub fn new(
-        device: &Device,
-        surface_config: &SurfaceConfiguration,
+        display: &DisplayState,
         update: DesktopUpdate<ImageBuf>,
     ) -> Self {
         assert_eq!(
@@ -37,6 +35,9 @@ impl DesktopDisplayState {
             0,
             "buffer size must be multiple of 16"
         );
+
+        let device = &display.device;
+        let surface_config = &display.surface_config;
 
         let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("uniform buffer"),
@@ -221,7 +222,7 @@ impl DesktopDisplayState {
             multiview: None,
         });
 
-        DesktopDisplayState {
+        DesktopView {
             pending_update: Mutex::new(Some(update)),
             desktop_texture,
             cursor_texture,
@@ -251,126 +252,135 @@ impl DesktopDisplayState {
 
     pub fn render(
         &mut self,
-        _device: &Device,
-        queue: &Queue,
-        output_view: &TextureView,
-        encoder: &mut CommandEncoder,
+        state: &DisplayState
     ) -> Result<(), wgpu::SurfaceError> {
-        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("desktop render pass"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: output_view,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: 0.0,
-                        g: 0.0,
-                        b: 0.0,
-                        a: 1.0,
-                    }),
-                    store: true,
-                },
-            })],
-            depth_stencil_attachment: None,
+        let output = state.surface.get_current_texture()?;
+        let output_view = output.texture.create_view(&Default::default());
+
+        let mut encoder = state.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("desktop view command encoder"),
         });
 
         {
-            let mut next_img = self.pending_update.lock().unwrap();
-            if let Some(update) = next_img.take() {
-                let desktop_img = update.desktop;
-                let desktop_img = if desktop_img.color_format == ColorFormat::Bgra8888 {
-                    desktop_img
-                } else {
-                    let mut copy_img = ImageBuf::alloc(
-                        desktop_img.width,
-                        desktop_img.height,
-                        None,
-                        ColorFormat::Bgra8888,
-                    );
-                    convert_color(&desktop_img, &mut copy_img);
-                    copy_img
-                };
-
-                let desktop_size = wgpu::Extent3d {
-                    width: desktop_img.width,
-                    height: desktop_img.height,
-                    depth_or_array_layers: 1,
-                };
-
-                queue.write_texture(
-                    wgpu::ImageCopyTexture {
-                        texture: &self.desktop_texture,
-                        mip_level: 0,
-                        origin: wgpu::Origin3d::ZERO,
-                        aspect: wgpu::TextureAspect::All,
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("desktop render pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &output_view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 0.0,
+                            g: 0.0,
+                            b: 0.0,
+                            a: 1.0,
+                        }),
+                        store: true,
                     },
-                    &desktop_img.data,
-                    wgpu::ImageDataLayout {
-                        offset: 0,
-                        bytes_per_row: Some(desktop_img.stride.try_into().unwrap()),
-                        rows_per_image: Some(desktop_img.height.try_into().unwrap()),
-                    },
-                    desktop_size,
-                );
+                })],
+                depth_stencil_attachment: None,
+            });
 
-                if let Some(cursor_state) = update.cursor {
-                    let uniform = Uniform {
-                        visible: cursor_state.visible as u32,
-                        xor_cursor: false as u32,
-                        cursor_relative_size: [
-                            desktop_img.width as f32 / 128.,
-                            desktop_img.height as f32 / 128.,
-                        ],
-                        cursor_pos: [
-                            cursor_state.pos_x as f32 / desktop_img.width as f32,
-                            cursor_state.pos_y as f32 / desktop_img.height as f32,
-                        ],
-                        _unused: Default::default(),
+            {
+                let mut next_img = self.pending_update.lock().unwrap();
+                if let Some(update) = next_img.take() {
+                    let desktop_img = update.desktop;
+                    let desktop_img = if desktop_img.color_format == ColorFormat::Bgra8888 {
+                        desktop_img
+                    } else {
+                        let mut copy_img = ImageBuf::alloc(
+                            desktop_img.width,
+                            desktop_img.height,
+                            None,
+                            ColorFormat::Bgra8888,
+                        );
+                        convert_color(&desktop_img, &mut copy_img);
+                        copy_img
                     };
 
-                    queue.write_buffer(&self.uniform_buffer, 0, bytemuck::bytes_of(&uniform));
+                    let desktop_size = wgpu::Extent3d {
+                        width: desktop_img.width,
+                        height: desktop_img.height,
+                        depth_or_array_layers: 1,
+                    };
 
-                    if let Some(shape) = cursor_state.shape {
-                        let mut temp_img = ImageBuf::alloc(128, 128, None, ColorFormat::Bgra8888);
+                    state.queue.write_texture(
+                        wgpu::ImageCopyTexture {
+                            texture: &self.desktop_texture,
+                            mip_level: 0,
+                            origin: wgpu::Origin3d::ZERO,
+                            aspect: wgpu::TextureAspect::All,
+                        },
+                        &desktop_img.data,
+                        wgpu::ImageDataLayout {
+                            offset: 0,
+                            bytes_per_row: Some(desktop_img.stride.try_into().unwrap()),
+                            rows_per_image: Some(desktop_img.height.try_into().unwrap()),
+                        },
+                        desktop_size,
+                    );
 
-                        assert_eq!(shape.image.color_format, ColorFormat::Bgra8888);
-                        for i in 0..shape.image.height as usize {
-                            for j in 0..shape.image.width as usize {
-                                for k in 0..4 {
-                                    temp_img.data[i * temp_img.stride as usize + j * 4 + k] =
-                                        shape.image.data
-                                            [i * shape.image.stride as usize + j * 4 + k];
+                    if let Some(cursor_state) = update.cursor {
+                        let uniform = Uniform {
+                            visible: cursor_state.visible as u32,
+                            xor_cursor: false as u32,
+                            cursor_relative_size: [
+                                desktop_img.width as f32 / 128.,
+                                desktop_img.height as f32 / 128.,
+                            ],
+                            cursor_pos: [
+                                cursor_state.pos_x as f32 / desktop_img.width as f32,
+                                cursor_state.pos_y as f32 / desktop_img.height as f32,
+                            ],
+                            _unused: Default::default(),
+                        };
+
+                        state.queue.write_buffer(&self.uniform_buffer, 0, bytemuck::bytes_of(&uniform));
+
+                        if let Some(shape) = cursor_state.shape {
+                            let mut temp_img = ImageBuf::alloc(128, 128, None, ColorFormat::Bgra8888);
+
+                            assert_eq!(shape.image.color_format, ColorFormat::Bgra8888);
+                            for i in 0..shape.image.height as usize {
+                                for j in 0..shape.image.width as usize {
+                                    for k in 0..4 {
+                                        temp_img.data[i * temp_img.stride as usize + j * 4 + k] =
+                                            shape.image.data
+                                                [i * shape.image.stride as usize + j * 4 + k];
+                                    }
                                 }
                             }
-                        }
 
-                        queue.write_texture(
-                            wgpu::ImageCopyTexture {
-                                texture: &self.cursor_texture,
-                                mip_level: 0,
-                                origin: wgpu::Origin3d::ZERO,
-                                aspect: wgpu::TextureAspect::All,
-                            },
-                            &temp_img.data,
-                            wgpu::ImageDataLayout {
-                                offset: 0,
-                                bytes_per_row: Some(temp_img.stride.try_into().unwrap()),
-                                rows_per_image: Some(temp_img.height.try_into().unwrap()),
-                            },
-                            wgpu::Extent3d {
-                                width: 128,
-                                height: 128,
-                                depth_or_array_layers: 1,
-                            },
-                        );
+                            state.queue.write_texture(
+                                wgpu::ImageCopyTexture {
+                                    texture: &self.cursor_texture,
+                                    mip_level: 0,
+                                    origin: wgpu::Origin3d::ZERO,
+                                    aspect: wgpu::TextureAspect::All,
+                                },
+                                &temp_img.data,
+                                wgpu::ImageDataLayout {
+                                    offset: 0,
+                                    bytes_per_row: Some(temp_img.stride.try_into().unwrap()),
+                                    rows_per_image: Some(temp_img.height.try_into().unwrap()),
+                                },
+                                wgpu::Extent3d {
+                                    width: 128,
+                                    height: 128,
+                                    depth_or_array_layers: 1,
+                                },
+                            );
+                        }
                     }
                 }
             }
+
+            pass.set_pipeline(&self.render_pipeline);
+            pass.set_bind_group(0, &self.bind_group, &[]);
+            pass.draw(0..3, 0..1);
         }
 
-        pass.set_pipeline(&self.render_pipeline);
-        pass.set_bind_group(0, &self.bind_group, &[]);
-        pass.draw(0..3, 0..1);
+        state.queue.submit(std::iter::once(encoder.finish()));
+        output.present();
 
         Ok(())
     }

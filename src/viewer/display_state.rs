@@ -1,17 +1,16 @@
 use crate::image::ImageBuf;
 use crate::util::DesktopUpdate;
-use crate::viewer::desktop_display_state::DesktopDisplayState;
+use crate::viewer::desktop_view::DesktopView;
 use anyhow::{ensure, Context, Result};
 use winit::event::WindowEvent;
 use winit::window::Window;
 
 pub struct DisplayState {
-    surface: wgpu::Surface,
-    device: wgpu::Device,
-    queue: wgpu::Queue,
-    surface_config: wgpu::SurfaceConfiguration,
-    size: winit::dpi::PhysicalSize<u32>,
-    desktop_display: Option<DesktopDisplayState>,
+    pub surface: wgpu::Surface,
+    pub device: wgpu::Device,
+    pub queue: wgpu::Queue,
+    pub surface_config: wgpu::SurfaceConfiguration,
+    pub size: winit::dpi::PhysicalSize<u32>,
 }
 
 impl DisplayState {
@@ -75,7 +74,6 @@ impl DisplayState {
             queue,
             surface_config,
             size,
-            desktop_display: None,
         })
     }
 
@@ -96,18 +94,7 @@ impl DisplayState {
         false
     }
 
-    pub fn update(&mut self, update: DesktopUpdate<ImageBuf>) {
-        match self.desktop_display.as_mut() {
-            Some(x) => x.update(update),
-            None => {
-                //FIXME: Use cursor info in constructor
-                let created = DesktopDisplayState::new(&self.device, &self.surface_config, update);
-                self.desktop_display = Some(created);
-            }
-        }
-    }
-
-    pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
+    pub fn render_empty(&mut self) -> Result<(), wgpu::SurfaceError> {
         let output = self.surface.get_current_texture()?;
         let view = output
             .texture
@@ -119,30 +106,23 @@ impl DisplayState {
                 label: Some("render encoder"),
             });
 
-        match self.desktop_display.as_mut() {
-            Some(x) => {
-                x.render(&self.device, &self.queue, &view, &mut encoder)?;
-            }
-            None => {
-                encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("empty render pass"),
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: &view,
-                        resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(wgpu::Color {
-                                r: 0.0,
-                                g: 0.0,
-                                b: 0.0,
-                                a: 1.0,
-                            }),
-                            store: true,
-                        },
-                    })],
-                    depth_stencil_attachment: None,
-                });
-            }
-        }
+        encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("empty render pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color {
+                        r: 0.0,
+                        g: 0.0,
+                        b: 0.0,
+                        a: 1.0,
+                    }),
+                    store: true,
+                },
+            })],
+            depth_stencil_attachment: None,
+        });
 
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
