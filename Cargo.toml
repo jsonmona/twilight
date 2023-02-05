@@ -4,17 +4,17 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-thiserror = "1.0.38"
 anyhow = "1.0.68"
+bytemuck = { version = "1.13.0", features = ["derive"] }
 capnp = "0.16.0"
-tokio = { version = "1.25.0", features = ["full"] }
-winit = "0.27.5"
-wgpu = "0.15.0"
+cfg-if = "1.0.0"
 env_logger = "0.10.0"
 flatbuffers = "23.1.21"
 pollster = "0.2.5"
-cfg-if = "1.0.0"
-bytemuck = { version = "1.13.0", features = ["derive"] }
+thiserror = "1.0.38"
+tokio = { version = "1.25.0", features = ["full"] }
+winit = "0.28.1"
+wgpu = "0.15.0"
 
 [dependencies.windows]
 version = "0.43.0"
