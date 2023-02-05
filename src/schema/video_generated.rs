@@ -21,13 +21,14 @@ pub mod video {
 #[deprecated(since = "2.0.0", note = "Use associated constants instead. This will no longer be generated in 2021.")]
 pub const ENUM_MIN_VIDEO_CODEC: i8 = 0;
 #[deprecated(since = "2.0.0", note = "Use associated constants instead. This will no longer be generated in 2021.")]
-pub const ENUM_MAX_VIDEO_CODEC: i8 = 2;
+pub const ENUM_MAX_VIDEO_CODEC: i8 = 3;
 #[deprecated(since = "2.0.0", note = "Use associated constants instead. This will no longer be generated in 2021.")]
 #[allow(non_camel_case_types)]
-pub const ENUM_VALUES_VIDEO_CODEC: [VideoCodec; 3] = [
+pub const ENUM_VALUES_VIDEO_CODEC: [VideoCodec; 4] = [
   VideoCodec::Empty,
   VideoCodec::Bgra8888,
   VideoCodec::Rgb24,
+  VideoCodec::Jpeg,
 ];
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
@@ -38,13 +39,15 @@ impl VideoCodec {
   pub const Empty: Self = Self(0);
   pub const Bgra8888: Self = Self(1);
   pub const Rgb24: Self = Self(2);
+  pub const Jpeg: Self = Self(3);
 
   pub const ENUM_MIN: i8 = 0;
-  pub const ENUM_MAX: i8 = 2;
+  pub const ENUM_MAX: i8 = 3;
   pub const ENUM_VALUES: &'static [Self] = &[
     Self::Empty,
     Self::Bgra8888,
     Self::Rgb24,
+    Self::Jpeg,
   ];
   /// Returns the variant's name or "" if unknown.
   pub fn variant_name(self) -> Option<&'static str> {
@@ -52,6 +55,7 @@ impl VideoCodec {
       Self::Empty => Some("Empty"),
       Self::Bgra8888 => Some("Bgra8888"),
       Self::Rgb24 => Some("Rgb24"),
+      Self::Jpeg => Some("Jpeg"),
       _ => None,
     }
   }

@@ -17,6 +17,16 @@ ultraviolet = { version = "0.9.0", features = [ "int", "bytemuck" ] }
 winit = "0.28.1"
 wgpu = "0.15.0"
 
+[target.'cfg(windows)'.dependencies.turbojpeg]
+version = "0.5.2"
+default-features = false
+features = [ "cmake" ]
+
+[target.'cfg(not(windows))'.dependencies.turbojpeg]
+version = "0.5.2"
+default-features = false
+features = [ "cmake", "pkg-config", "require-simd" ]
+
 [dependencies.windows]
 version = "0.43.0"
 features = [

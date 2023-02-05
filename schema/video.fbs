@@ -4,6 +4,7 @@ enum VideoCodec : byte {
   Empty = 0,
   Bgra8888,
   Rgb24,
+  Jpeg,
 }
 
 struct Size2u {
