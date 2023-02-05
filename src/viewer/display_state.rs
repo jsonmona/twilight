@@ -1,8 +1,4 @@
-use crate::image::ImageBuf;
-use crate::util::DesktopUpdate;
-use crate::viewer::desktop_view::DesktopView;
 use anyhow::{ensure, Context, Result};
-use winit::event::WindowEvent;
 use winit::window::Window;
 
 pub struct DisplayState {
@@ -88,10 +84,6 @@ impl DisplayState {
 
     pub fn reconfigure_surface(&mut self) {
         self.resize(self.size);
-    }
-
-    pub fn input(&mut self, _event: &WindowEvent) -> bool {
-        false
     }
 
     pub fn render_empty(&mut self) -> Result<(), wgpu::SurfaceError> {

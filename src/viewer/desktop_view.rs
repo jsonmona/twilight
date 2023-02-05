@@ -1,10 +1,10 @@
 use crate::image::{convert_color, ColorFormat, ImageBuf};
 use crate::util::DesktopUpdate;
+use crate::viewer::display_state::DisplayState;
 use bytemuck::{Pod, Zeroable};
 use std::sync::Mutex;
 use wgpu::util::DeviceExt;
-use wgpu::{BindGroup, Buffer, CommandEncoder, Device, Queue, SurfaceConfiguration, Texture, TextureAspect, TextureView, TextureViewDescriptor};
-use crate::viewer::display_state::DisplayState;
+use wgpu::{BindGroup, Buffer, Texture};
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
@@ -26,10 +26,7 @@ pub struct DesktopView {
 }
 
 impl DesktopView {
-    pub fn new(
-        display: &DisplayState,
-        update: DesktopUpdate<ImageBuf>,
-    ) -> Self {
+    pub fn new(display: &DisplayState, update: DesktopUpdate<ImageBuf>) -> Self {
         assert_eq!(
             std::mem::size_of::<Uniform>() % 16,
             0,
@@ -250,16 +247,15 @@ impl DesktopView {
         }
     }
 
-    pub fn render(
-        &mut self,
-        state: &DisplayState
-    ) -> Result<(), wgpu::SurfaceError> {
+    pub fn render(&mut self, state: &DisplayState) -> Result<(), wgpu::SurfaceError> {
         let output = state.surface.get_current_texture()?;
         let output_view = output.texture.create_view(&Default::default());
 
-        let mut encoder = state.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("desktop view command encoder"),
-        });
+        let mut encoder = state
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("desktop view command encoder"),
+            });
 
         {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -334,10 +330,15 @@ impl DesktopView {
                             _unused: Default::default(),
                         };
 
-                        state.queue.write_buffer(&self.uniform_buffer, 0, bytemuck::bytes_of(&uniform));
+                        state.queue.write_buffer(
+                            &self.uniform_buffer,
+                            0,
+                            bytemuck::bytes_of(&uniform),
+                        );
 
                         if let Some(shape) = cursor_state.shape {
-                            let mut temp_img = ImageBuf::alloc(128, 128, None, ColorFormat::Bgra8888);
+                            let mut temp_img =
+                                ImageBuf::alloc(128, 128, None, ColorFormat::Bgra8888);
 
                             assert_eq!(shape.image.color_format, ColorFormat::Bgra8888);
                             for i in 0..shape.image.height as usize {

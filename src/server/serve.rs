@@ -9,10 +9,24 @@ use crate::util::DesktopUpdate;
 use anyhow::{anyhow, Context, Result};
 use flatbuffers::FlatBufferBuilder;
 use std::time::{Duration, Instant};
-use tokio::io::{AsyncWriteExt, BufStream};
+use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt, BufStream, DuplexStream};
 use tokio::sync::{mpsc, oneshot};
 
 pub async fn serve() -> Result<()> {
+    serve_inner::<DuplexStream>(None).await
+}
+
+pub async fn serve_debug<RW>(stream: RW) -> Result<()>
+where
+    RW: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+{
+    serve_inner(Some(stream)).await
+}
+
+async fn serve_inner<RW>(stream: Option<RW>) -> Result<()>
+where
+    RW: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+{
     let mut builder = FlatBufferBuilder::with_capacity(2 * 1024 * 1024);
 
     let (resolution_tx, resolution) = oneshot::channel();
@@ -56,14 +70,21 @@ pub async fn serve() -> Result<()> {
 
     let (w, h) = resolution.await?;
 
-    let listener =
-        tokio::net::TcpListener::bind((std::net::Ipv4Addr::new(127, 0, 0, 1), 6495)).await?;
+    let listener;
 
-    let (stream, client_addr) = listener.accept().await?;
-    println!("Connected to {client_addr}");
+    let mut stream: Box<dyn AsyncWrite + Unpin + Send + 'static> = match stream {
+        Some(x) => Box::new(x),
+        None => {
+            listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::new(127, 0, 0, 1), 6495))
+                .await?;
 
-    stream.set_nodelay(true)?;
-    let mut stream = BufStream::new(stream);
+            let (stream, client_addr) = listener.accept().await?;
+            println!("Connected to {client_addr}");
+
+            stream.set_nodelay(true)?;
+            Box::new(BufStream::new(stream))
+        }
+    };
 
     send_msg_with(&mut stream, &mut builder, |builder| {
         NotifyVideoStart::create(

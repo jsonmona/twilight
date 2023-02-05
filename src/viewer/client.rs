@@ -1,14 +1,14 @@
-use std::net::IpAddr;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use anyhow::{anyhow, Result};
-use tokio::sync::{mpsc, oneshot};
-use tokio::task::JoinHandle;
 use crate::image::{ColorFormat, Image, ImageBuf};
-use crate::util::{CursorShape, CursorState, DesktopUpdate};
-use tokio::io::{AsyncRead, AsyncWrite, AsyncReadExt, BufStream};
 use crate::network::util::recv_msg;
 use crate::schema::video::{NotifyVideoStart, VideoFrame};
+use crate::util::{CursorShape, CursorState, DesktopUpdate};
+use anyhow::{anyhow, Result};
+use std::net::IpAddr;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, BufStream};
+use tokio::sync::{mpsc, oneshot};
+use tokio::task::JoinHandle;
 
 pub struct Client {
     update: mpsc::Receiver<DesktopUpdate<ImageBuf>>,
@@ -33,11 +33,14 @@ impl Client {
 
     /// Start a brand-new connection with provided stream.
     /// The stream should be buffered (@see connect_to)
-    pub async fn with_stream<RW: AsyncRead + AsyncWrite + Unpin + Send + 'static>(stream: RW) -> Result<Self> {
+    pub async fn with_stream<RW: AsyncRead + AsyncWrite + Unpin + Send + 'static>(
+        stream: RW,
+    ) -> Result<Self> {
         let flag_run = Arc::new(AtomicBool::new(true));
         let (resolution_tx, resolution_rx) = oneshot::channel();
         let (tx, rx) = mpsc::channel(1);
-        let receiver = tokio::task::spawn(frame_receiver(stream, tx, resolution_tx, flag_run.clone()));
+        let receiver =
+            tokio::task::spawn(frame_receiver(stream, tx, resolution_tx, flag_run.clone()));
 
         let resolution = resolution_rx.await?;
 
@@ -47,10 +50,6 @@ impl Client {
             resolution,
             receiver,
         })
-    }
-
-    pub fn blocking_recv(&mut self) -> Option<DesktopUpdate<ImageBuf>> {
-        self.update.blocking_recv()
     }
 
     pub async fn async_recv(&mut self) -> Option<DesktopUpdate<ImageBuf>> {
@@ -72,8 +71,12 @@ impl Client {
     }
 }
 
-async fn frame_receiver<RW: AsyncRead + AsyncWrite + Unpin>(mut stream: RW, tx: mpsc::Sender<DesktopUpdate<ImageBuf>>, resolution_tx: oneshot::Sender<(u32, u32)>, flag_run: Arc<AtomicBool>) -> Result<()> {
-    let mut frames = 0;
+async fn frame_receiver<RW: AsyncRead + AsyncWrite + Unpin>(
+    mut stream: RW,
+    tx: mpsc::Sender<DesktopUpdate<ImageBuf>>,
+    resolution_tx: oneshot::Sender<(u32, u32)>,
+    flag_run: Arc<AtomicBool>,
+) -> Result<()> {
     let mut buffer = vec![0u8; 2 * 1024 * 1024];
 
     let msg: NotifyVideoStart = recv_msg(&mut buffer, &mut stream).await?;
@@ -82,7 +85,9 @@ async fn frame_receiver<RW: AsyncRead + AsyncWrite + Unpin>(mut stream: RW, tx: 
     let format =
         ColorFormat::from_video_codec(msg.desktop_codec()).expect("requires uncompressed format");
 
-    resolution_tx.send((w, h)).map_err(|_| anyhow!("resolution_tx is closed"))?;
+    resolution_tx
+        .send((w, h))
+        .map_err(|_| anyhow!("resolution_tx is closed"))?;
 
     while flag_run.load(Ordering::Relaxed) {
         let mut img = ImageBuf::alloc(w, h, None, format);
@@ -114,7 +119,6 @@ async fn frame_receiver<RW: AsyncRead + AsyncWrite + Unpin>(mut stream: RW, tx: 
         if tx.send(update).await.is_err() {
             break;
         }
-        frames += 1;
     }
 
     Ok(())
