@@ -45,23 +45,38 @@ Note: The default prefix for the HTTP endpoints is `/twilight`,
 which is configurable. For example, `/twilight/auth`.
 
 ---
-`POST /auth?type=cert`
-Authorize the client using certificates.
+`POST /auth?type=????`
+Authenticate the user with specified type.
 
-Client will send its certificate in the request body.
-Server will reply with its certificate.
-
-Response status codes:  
 200 &rarr; Successfully authorized. Client may proceed.  
-400 &rarr; Not a valid request or signature.  
-403 &rarr; Signature is successfully parsed, but client is not in
-authorization list.
+Others &rarr; Returns message as body (Unresolved question: how to localize them?)
 
 A successful response will set a cookie 🍪 to authenticate requests.
 
 This endpoint is special.
 Attempts to use other endpoints without the cookie will result in
 a 404 Not Found response.
+
+---
+`POST /auth?type=username`
+Always accept the client.
+
+Client will send its username in the request body.
+It it trimmed before use.
+
+This auth type is insecure and is mainly for debugging.
+
+---
+`POST /auth?type=cert`
+Authenticate the client using certificates.
+
+Client will send its certificate in the request body.
+Server will reply with its certificate.
+
+Response status codes:  
+400 &rarr; Not a valid request or signature.  
+403 &rarr; Signature is successfully parsed, but client is not in
+authorization list.
 
 ---
 `GET /stream`
