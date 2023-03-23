@@ -20,63 +20,48 @@ Then it will switch to websocket and begin communicating using
 flatbuffer protocol.
 
 ### Encryption
-There are two kinds of connection used in this project.
-One is HTTP connection.
-They are encrypted by TLS, and server does not care if it's
-encrypted or not.
-The other is WebSocket connection.
-This is where the main communication is done.
+The protocol trusts the outer TLS for doing encryption.
+If plain HTTP is used, the whole connection will not be encrypted.
 
-The HTTP(s) and WebSocket transport trusts the outer TLS.
-If either server or client reports that it's not encrypted,
-An inner TLS session will be formed inside the WebSocket.
-It happens when a) it sees unencrypted connection b) it sees
-certificate that is both not in webpki and not Twilight Remote
-Desktop certificate of the other one.
-
-"Twilight Remote Desktop certificate" is
-just a self-signed certificate that is used to advertise itself.
-It's like SSH keys, except that both server and client has them.
-They will remember fingerprint of that certificate to accomplish
-"remember this PC" feature.
+If TLS is used but the certificate is not trusted (e.g. self-signed),
+server auth will be performed.
 
 ### HTTP Endpoints
 Note: The default prefix for the HTTP endpoints is `/twilight`,
 which is configurable. For example, `/twilight/auth`.
 
+#### Non-privileged endpoints
+Endpoints described here may be called before client auth.
+
+---
+`POST /auth-server?type=???`
+Authenticate the serve with specified type.
+
+Since TLS is not yet implemented, this endpoint is not designed yet.
+
 ---
 `POST /auth?type=????`
-Authenticate the user with specified type.
+Authenticate the client with specified type.
 
 200 &rarr; Successfully authorized. Client may proceed.  
 Others &rarr; Returns message as body (Unresolved question: how to localize them?)
 
 A successful response will set a cookie 🍪 to authenticate requests.
 
-This endpoint is special.
-Attempts to use other endpoints without the cookie will result in
-a 404 Not Found response.
-
 ---
-`POST /auth?type=username`
+`POST /auth?type=debug`
 Always accept the client.
 
 Client will send its username in the request body.
-It it trimmed before use.
+It is trimmed before use.
 
 This auth type is insecure and is mainly for debugging.
 
 ---
-`POST /auth?type=cert`
-Authenticate the client using certificates.
 
-Client will send its certificate in the request body.
-Server will reply with its certificate.
-
-Response status codes:  
-400 &rarr; Not a valid request or signature.  
-403 &rarr; Signature is successfully parsed, but client is not in
-authorization list.
+#### Privileged endpoints
+Endpoints described here needs the authentication cookie 🍪,
+or they will return 403 Forbidden.
 
 ---
 `GET /stream`
