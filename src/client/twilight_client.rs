@@ -1,5 +1,5 @@
 use crate::client::server_connection::{FetchResponse, MessageStream, ServerConnection};
-use crate::image::{convert_color, ColorFormat, Image, ImageBuf};
+use crate::image::{ColorFormat, ImageBuf};
 use crate::network::util::parse_msg;
 use crate::schema::video::{Coord2f, Coord2u, NotifyVideoStart, VideoCodec, VideoFrame};
 use crate::util::{CursorShape, CursorState, DesktopUpdate};
@@ -10,6 +10,8 @@ use hyper::Method;
 
 use std::future::Future;
 
+use crate::video::decoder::jpeg::JpegDecoder;
+use crate::video::decoder::DecoderStage;
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
 
@@ -91,6 +93,8 @@ async fn worker<Conn: ServerConnection>(
         height: resolution.height(),
     });
 
+    let mut decoder = JpegDecoder::new(resolution.width(), resolution.height())?;
+
     loop {
         let msg = tokio::select! {
             biased;
@@ -121,21 +125,8 @@ async fn worker<Conn: ServerConnection>(
             "Video frame length does not match"
         );
 
-        assert_eq!(desktop_codec, VideoCodec::Rgb24);
-        let payload = Image::new(
-            resolution.width(),
-            resolution.height(),
-            resolution.width() * 3,
-            ColorFormat::Rgb24,
-            payload,
-        );
-        let mut desktop_img = ImageBuf::alloc(
-            resolution.width(),
-            resolution.height(),
-            None,
-            ColorFormat::Bgra8888,
-        );
-        convert_color(&payload, &mut desktop_img);
+        assert_eq!(desktop_codec, VideoCodec::Jpeg);
+        let desktop_img = decoder.decode(&payload)?;
 
         let update = DesktopUpdate {
             cursor: frame.cursor_update().map(|x| {

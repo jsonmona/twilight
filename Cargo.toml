@@ -38,7 +38,7 @@ features = [ "cmake" ]
 [target.'cfg(not(windows))'.dependencies.turbojpeg]
 version = "0.5.2"
 default-features = false
-features = [ "cmake", "pkg-config", "require-simd" ]
+features = [ "pkg-config", "require-simd" ]
 
 [dependencies.windows]
 version = "0.44.0"

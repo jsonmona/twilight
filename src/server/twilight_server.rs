@@ -1,4 +1,3 @@
-use crate::image::{convert_color, ColorFormat, ImageBuf};
 use crate::network::util::send_msg_with;
 use crate::schema::video::{
     Coord2f, Coord2u, CursorShape, CursorShapeArgs, CursorUpdate, CursorUpdateArgs,
@@ -7,6 +6,8 @@ use crate::schema::video::{
 use crate::server::new_capture_pipeline;
 use crate::server::session_id::SessionId;
 use crate::util::{try_block_in_place, DesktopUpdate};
+use crate::video::encoder::jpeg::JpegEncoder;
+use crate::video::encoder::EncoderStage;
 use anyhow::{bail, Context, Result};
 use cookie::{Cookie, SameSite};
 use flatbuffers::FlatBufferBuilder;
@@ -286,11 +287,16 @@ async fn handle_stream(mut req: Request<Body>, server: Arc<TwilightServer>) -> R
             .unwrap();
         resolution = pipeline.resolution();
 
+        let mut encoder = JpegEncoder::new(resolution.0, resolution.1, true).unwrap();
+
         *looper = Some(tokio::task::spawn(async move {
             while let Some(reader) = pipeline.reader() {
                 match reader.recv().await {
                     None => break,
                     Some(update) => {
+                        let (update, desktop) = update.split();
+                        let desktop = encoder.encode(desktop).unwrap();
+                        let update = update.with_desktop(desktop);
                         if tx.send(update).await.is_err() {
                             break;
                         }
@@ -324,7 +330,7 @@ async fn websocket_io(
     sock: HyperWebsocket,
     _server: Arc<TwilightServer>,
     resolution: (u32, u32),
-    mut rx: mpsc::Receiver<DesktopUpdate<ImageBuf>>,
+    mut rx: mpsc::Receiver<DesktopUpdate<Vec<u8>>>,
 ) -> Result<()> {
     let sock = sock.await?;
     let (mut writer, mut reader) = sock.split();
@@ -366,7 +372,7 @@ async fn websocket_io(
                 builder,
                 &NotifyVideoStartArgs {
                     resolution: Some(&Size2u::new(w, h)),
-                    desktop_codec: VideoCodec::Rgb24,
+                    desktop_codec: VideoCodec::Jpeg,
                 },
             )
         })
@@ -375,16 +381,10 @@ async fn websocket_io(
 
         loop {
             let update = rx.recv().await.context("image capture stopped")?;
-            let img = update.desktop;
+            let desktop = update.desktop;
             let cursor = update.cursor;
 
-            anyhow::ensure!(img.width == w);
-            anyhow::ensure!(img.height == h);
-
-            let mut img_rgb24 = ImageBuf::alloc(w, h, None, ColorFormat::Rgb24);
-            convert_color(&img, &mut img_rgb24);
-
-            let video_bytes = img_rgb24.data.len().try_into()?;
+            let video_bytes = desktop.len().try_into()?;
             send_msg_with(&mut writer, &mut builder, |builder| {
                 let cursor_update = cursor.map(|cursor_state| {
                     let shape = cursor_state.shape.map(|cursor_shape| {
@@ -424,7 +424,7 @@ async fn websocket_io(
                 )
             })
             .await?;
-            writer.feed(Message::Binary(img_rgb24.data)).await?;
+            writer.feed(Message::Binary(desktop)).await?;
             writer.flush().await?;
         }
 

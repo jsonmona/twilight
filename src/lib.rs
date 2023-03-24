@@ -5,4 +5,5 @@ pub mod platform;
 pub mod schema;
 pub mod server;
 pub mod util;
+pub mod video;
 pub mod viewer;
