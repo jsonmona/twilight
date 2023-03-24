@@ -1,4 +1,3 @@
-mod client;
 mod desktop_view;
 mod display_state;
 mod launch;

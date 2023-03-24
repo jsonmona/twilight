@@ -96,7 +96,8 @@ impl<D: Deref<Target = [u8]>> Image<D> {
         }
     }
 
-    pub fn copy_data(&self) -> ImageBuf {
+    #[must_use]
+    pub fn copied(&self) -> ImageBuf {
         ImageBuf {
             width: self.width,
             height: self.height,
@@ -118,7 +119,7 @@ impl<D: Deref<Target = [u8]>> Image<D> {
             target.data.copy_from_slice(&self.data);
         } else {
             // slow path
-            *target = self.copy_data();
+            *target = self.copied();
         }
     }
 

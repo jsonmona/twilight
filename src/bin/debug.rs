@@ -5,8 +5,7 @@ async fn main() {
     twilight::platform::win32::init_dpi();
     env_logger::init();
 
-    // Intentionally small buffer so that we test partial writes
-    let (tx, rx) = tokio::io::duplex(127);
+    let (tx, rx) = tokio::io::duplex(8192);
 
     let server = tokio::spawn(twilight::server::serve_debug(tx));
 

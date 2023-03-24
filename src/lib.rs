@@ -1,3 +1,4 @@
+pub mod client;
 pub mod image;
 pub mod network;
 pub mod platform;

@@ -1,6 +1,7 @@
-use crate::image::ImageBuf;
+use crate::client::native_server_connection::NativeServerConnection;
+use crate::client::{TwilightClient, TwilightClientEvent};
+
 use crate::util::DesktopUpdate;
-use crate::viewer::client::Client;
 use crate::viewer::desktop_view::DesktopView;
 use crate::viewer::display_state::DisplayState;
 use cfg_if::cfg_if;
@@ -8,7 +9,7 @@ use std::marker::PhantomData;
 use std::net::{IpAddr, Ipv4Addr};
 use std::str::FromStr;
 use std::time::{Duration, Instant};
-use tokio::io::{AsyncRead, AsyncWrite, DuplexStream};
+use tokio::io::DuplexStream;
 use winit::event;
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoopBuilder};
@@ -21,33 +22,20 @@ struct NonSend(PhantomData<*const usize>);
 pub async fn launch() -> ! {
     let _guard: NonSend = Default::default();
 
-    launch_inner::<DuplexStream>(None).await
+    launch_inner(None).await
 }
 
 // must be called from main thread
-pub async fn launch_debug<RW>(stream: RW) -> !
-where
-    RW: AsyncRead + AsyncWrite + Unpin + Send + 'static,
-{
+pub async fn launch_debug(stream: DuplexStream) -> ! {
     let _guard: NonSend = Default::default();
 
     launch_inner(Some(stream)).await
 }
 
-enum MyEvent {
-    NextUpdate(DesktopUpdate<ImageBuf>),
-    Quit,
-}
-
 // must be called from main thread (because EventLoop requires to do so)
-async fn launch_inner<RW>(stream: Option<RW>) -> !
-where
-    RW: AsyncRead + AsyncWrite + Unpin + Send + 'static,
-{
-    let event_loop = EventLoopBuilder::<MyEvent>::with_user_event().build();
+async fn launch_inner(debug_stream: Option<DuplexStream>) -> ! {
+    let event_loop = EventLoopBuilder::<TwilightClientEvent>::with_user_event().build();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
-
-    let proxy = event_loop.create_proxy();
 
     let mut display_state = None;
     cfg_if! {
@@ -59,32 +47,26 @@ where
 
     let mut desktop_view: Option<DesktopView> = None;
 
-    let mut client = match stream {
-        Some(x) => Client::with_stream(x).await.expect("connection error"),
-        None => {
-            let addr = IpAddr::V4(Ipv4Addr::from_str("127.0.0.1").expect("valid ipv4 address"));
-            Client::connect_to(addr, None)
-                .await
-                .expect("connection error")
-        }
+    let proxy = event_loop.create_proxy();
+    let proxy2 = event_loop.create_proxy();
+    let callback = move |e: TwilightClientEvent| {
+        proxy.send_event(e).unwrap();
+    };
+    let callback2 = move |e: TwilightClientEvent| {
+        proxy2.send_event(e).unwrap();
     };
 
-    tokio::task::spawn(async move {
-        while client.is_running() {
-            match client.async_recv().await {
-                Some(update) => {
-                    if proxy.send_event(MyEvent::NextUpdate(update)).is_err() {
-                        client.signal_quit();
-                    }
-                }
-                None => {
-                    let _ = proxy.send_event(MyEvent::Quit);
-                    client.signal_quit();
-                }
-            }
+    let _client = match debug_stream {
+        Some(_) => {
+            todo!();
         }
-        client.join().await
-    });
+        None => {
+            let addr = IpAddr::V4(Ipv4Addr::from_str("127.0.0.1").expect("valid ipv4 address"));
+            TwilightClient::new(Box::new(callback), Box::new(callback2), async move {
+                NativeServerConnection::new(addr, 6497).await
+            })
+        }
+    };
 
     let mut old_time = Instant::now();
     let mut frames = 0u32;
@@ -102,7 +84,15 @@ where
         }
         Event::MainEventsCleared => {}
         Event::UserEvent(kind) => match kind {
-            MyEvent::NextUpdate(update) => {
+            TwilightClientEvent::Connected { width, height } => {
+                println!("Connected to {width}x{height}");
+            }
+            TwilightClientEvent::NextFrame(update) => {
+                let update = DesktopUpdate {
+                    cursor: update.cursor,
+                    desktop: update.desktop.copied(),
+                };
+
                 window.request_redraw();
                 let state = display_state.as_mut().unwrap();
                 match desktop_view.as_mut() {
@@ -114,7 +104,8 @@ where
                     }
                 }
             }
-            MyEvent::Quit => {
+            TwilightClientEvent::Closed(r) => {
+                r.unwrap();
                 *control_flow = ControlFlow::Exit;
             }
         },
