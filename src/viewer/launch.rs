@@ -1,11 +1,10 @@
 use crate::client::native_server_connection::NativeServerConnection;
 use crate::client::{TwilightClient, TwilightClientEvent};
 
-use crate::util::DesktopUpdate;
+use crate::util::{DesktopUpdate, NonSend};
 use crate::viewer::desktop_view::DesktopView;
 use crate::viewer::display_state::DisplayState;
 use cfg_if::cfg_if;
-use std::marker::PhantomData;
 use std::net::{IpAddr, Ipv4Addr};
 use std::str::FromStr;
 use std::time::{Duration, Instant};
@@ -15,25 +14,18 @@ use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoopBuilder};
 use winit::window::WindowBuilder;
 
-#[derive(Default)]
-struct NonSend(PhantomData<*const usize>);
-
-// must be called from main thread
-pub async fn launch() -> ! {
-    let _guard: NonSend = Default::default();
-
-    launch_inner(None).await
+/// must be called from main thread
+pub async fn launch(main_thread: NonSend) -> ! {
+    launch_inner(None, main_thread).await
 }
 
-// must be called from main thread
-pub async fn launch_debug(stream: DuplexStream) -> ! {
-    let _guard: NonSend = Default::default();
-
-    launch_inner(Some(stream)).await
+/// must be called from main thread
+pub async fn launch_debug(stream: DuplexStream, main_thread: NonSend) -> ! {
+    launch_inner(Some(stream), main_thread).await
 }
 
-// must be called from main thread (because EventLoop requires to do so)
-async fn launch_inner(debug_stream: Option<DuplexStream>) -> ! {
+/// must be called from main thread (because EventLoop requires to do so)
+async fn launch_inner(debug_stream: Option<DuplexStream>, _main_thread: NonSend) -> ! {
     let event_loop = EventLoopBuilder::<TwilightClientEvent>::with_user_event().build();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
 
