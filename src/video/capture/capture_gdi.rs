@@ -1,5 +1,6 @@
 use crate::image::{ColorFormat, Image, ImageBuf};
 use crate::util::{CursorShape, CursorState, DesktopUpdate};
+use crate::video::capture::CaptureStage;
 use anyhow::{ensure, Result};
 use std::ffi::c_void;
 use std::mem::{size_of, zeroed};
@@ -9,7 +10,8 @@ use windows::Win32::UI::WindowsAndMessaging::*;
 
 // https://github.com/obsproject/obs-studio/blob/6fb83abaeb711d1e12054d2ef539da5c43237c58/plugins/win-capture/dc-capture.c#L38
 
-pub struct CaptureGdi {
+#[derive(Debug)]
+pub struct GdiCaptureStage {
     is_open: bool,
 
     hdc: HDC,
@@ -22,8 +24,8 @@ pub struct CaptureGdi {
     last_cursor: HCURSOR,
 }
 
-impl CaptureGdi {
-    pub fn new() -> Result<CaptureGdi> {
+impl GdiCaptureStage {
+    pub fn new() -> Result<GdiCaptureStage> {
         // SAFETY: FFI
         unsafe {
             //FIXME: Resource leak on early return
@@ -73,7 +75,7 @@ impl CaptureGdi {
 
             let old_bitmap = SelectObject(memdc, bitmap);
 
-            Ok(CaptureGdi {
+            Ok(GdiCaptureStage {
                 is_open: true,
                 hdc,
                 memdc,
@@ -86,8 +88,14 @@ impl CaptureGdi {
             })
         }
     }
+}
 
-    pub fn capture(&mut self) -> Result<DesktopUpdate<Image<&[u8]>>> {
+impl CaptureStage for GdiCaptureStage {
+    fn resolution(&self) -> (u32, u32) {
+        (self.width, self.height)
+    }
+
+    fn next(&mut self) -> Result<DesktopUpdate<Image<&[u8]>>> {
         assert!(self.is_open, "tried to capture from closed CaptureGdi");
 
         let cursor_state;
@@ -168,12 +176,12 @@ impl CaptureGdi {
         })
     }
 
-    pub fn resolution(&self) -> (u32, u32) {
-        (self.width, self.height)
+    fn close(&mut self) {
+        self.is_open = false;
     }
 }
 
-impl Drop for CaptureGdi {
+impl Drop for GdiCaptureStage {
     fn drop(&mut self) {
         // SAFETY: FFI
         unsafe {

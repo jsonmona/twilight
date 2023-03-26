@@ -1,14 +1,11 @@
-use std::cell::RefCell;
 use crate::network::util::send_msg_with;
 use crate::schema::video::{
     Coord2f, Coord2u, CursorShape, CursorShapeArgs, CursorUpdate, CursorUpdateArgs,
     NotifyVideoStart, NotifyVideoStartArgs, Size2u, VideoCodec, VideoFrame, VideoFrameArgs,
 };
-use crate::server::new_capture_pipeline;
 use crate::server::session_id::SessionId;
-use crate::util::{try_block_in_place, DesktopUpdate, UnwrappedRefMut};
-use crate::video::encoder::jpeg::JpegEncoder;
-use crate::video::encoder::EncoderStage;
+use crate::util::{DesktopUpdate, UnwrappedRefMut};
+use crate::video::capture_pipeline;
 use anyhow::{bail, Context, Result};
 use cookie::{Cookie, SameSite};
 use flatbuffers::FlatBufferBuilder;
@@ -26,6 +23,7 @@ use lazy_static::lazy_static;
 use rand::prelude::*;
 use regex::Regex;
 use rustc_hash::FxHashMap;
+use std::cell::RefCell;
 use std::collections::hash_map::Entry;
 use std::convert::Infallible;
 use std::net::SocketAddr;
@@ -141,7 +139,10 @@ impl TwilightServer {
 
 impl Drop for TwilightServer {
     fn drop(&mut self) {
-        assert!(self.workers.borrow_mut().is_empty(), "TwilightServer dropped without shutdown");
+        assert!(
+            self.workers.borrow_mut().is_empty(),
+            "TwilightServer dropped without shutdown"
+        );
     }
 }
 
@@ -149,8 +150,8 @@ impl Drop for TwilightServer {
 struct LocalExec;
 
 impl<F> hyper::rt::Executor<F> for LocalExec
-    where
-        F: std::future::Future + 'static,
+where
+    F: std::future::Future + 'static,
 {
     fn execute(&self, fut: F) {
         tokio::task::spawn_local(fut);
@@ -308,51 +309,17 @@ async fn handle_stream(mut req: Request<Body>, server: Rc<TwilightServer>) -> Re
         return handle_error(StatusCode::BAD_REQUEST);
     }
 
-    let resolution;
-    let (tx, rx) = mpsc::channel(1);
-
     // initialize capture_worker
-    {
-        let prev_worker = server.capture_worker.borrow_mut().take();
-        if let Some(handle) = prev_worker {
-            if !handle.is_finished() {
-                //TODO: Allow multiple connections
-                let mut res = Response::new(Body::from("client already connected"));
-                *res.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
-                return res;
-            } else {
-                handle
-                    .await
-                    .unwrap()
-                    .unwrap();
-            }
+    let prev_worker = server.capture_worker.borrow_mut().take();
+    if let Some(handle) = prev_worker {
+        if !handle.is_finished() {
+            //TODO: Allow multiple connections
+            let mut res = Response::new(Body::from("client already connected"));
+            *res.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+            return res;
+        } else {
+            handle.await.unwrap().unwrap();
         }
-
-        let mut pipeline = try_block_in_place(new_capture_pipeline)
-            .await
-            .unwrap()
-            .unwrap();
-        resolution = pipeline.resolution();
-
-        let mut encoder = JpegEncoder::new(resolution.0, resolution.1, true).unwrap();
-
-        *server.capture_worker.borrow_mut() = Some(tokio::task::spawn(async move {
-            while let Some(reader) = pipeline.reader() {
-                match reader.recv().await {
-                    None => break,
-                    Some(update) => {
-                        let (update, desktop) = update.split();
-                        let desktop = encoder.encode(desktop).unwrap();
-                        let update = update.with_desktop(desktop);
-                        if tx.send(update).await.is_err() {
-                            break;
-                        }
-                    }
-                }
-            }
-            pipeline.close();
-            Ok(())
-        }));
     }
 
     //TODO: Verify origin header
@@ -364,8 +331,10 @@ async fn handle_stream(mut req: Request<Body>, server: Rc<TwilightServer>) -> Re
         }
     };
 
+    let (w, h, pipeline) = capture_pipeline().unwrap();
+
     tokio::task::spawn_local(async move {
-        websocket_io(websocket, server, resolution, rx)
+        websocket_io(websocket, server, (w, h), pipeline)
             .await
             .unwrap();
     });
@@ -375,7 +344,7 @@ async fn handle_stream(mut req: Request<Body>, server: Rc<TwilightServer>) -> Re
 
 async fn websocket_io(
     sock: HyperWebsocket,
-    _server: Rc<TwilightServer>,
+    server: Rc<TwilightServer>,
     resolution: (u32, u32),
     mut rx: mpsc::Receiver<DesktopUpdate<Vec<u8>>>,
 ) -> Result<()> {
@@ -383,9 +352,19 @@ async fn websocket_io(
     let (mut writer, mut reader) = sock.split();
 
     let (w, h) = resolution;
+    let mut shutdown = server.shutdown_rx.clone();
+    let shutdown2 = shutdown.clone();
 
     let receiver = tokio::task::spawn(async move {
-        while let Some(msg) = reader.next().await {
+        let mut shutdown = shutdown2;
+
+        loop {
+            let msg: Option<Result<Message, tungstenite::Error>> = tokio::select! {
+                biased;
+                _ = shutdown.changed() => break,
+                x = reader.next() => x,
+            };
+            let msg = msg.context("image capture stopped")?;
             let msg = match msg {
                 Ok(x) => x,
                 Err(e) => match e {
@@ -426,8 +405,13 @@ async fn websocket_io(
         .await?;
         writer.flush().await?;
 
-        loop {
-            let update = rx.recv().await.context("image capture stopped")?;
+        while !*shutdown.borrow() {
+            let update: Option<DesktopUpdate<Vec<u8>>> = tokio::select! {
+                biased;
+                _ = shutdown.changed() => break,
+                x = rx.recv() => x,
+            };
+            let update = update.context("image capture stopped")?;
             let desktop = update.desktop;
             let cursor = update.cursor;
 

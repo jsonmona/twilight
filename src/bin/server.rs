@@ -7,8 +7,6 @@ async fn main() {
 
     let local = LocalSet::new();
 
-    local.spawn_local(async {
-        twilight::server::serve().await.expect("launching server")
-    });
+    local.spawn_local(async { twilight::server::serve().await.expect("launching server") });
     local.await;
 }
