@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use crate::network::util::send_msg_with;
 use crate::schema::video::{
     Coord2f, Coord2u, CursorShape, CursorShapeArgs, CursorUpdate, CursorUpdateArgs,
@@ -5,7 +6,7 @@ use crate::schema::video::{
 };
 use crate::server::new_capture_pipeline;
 use crate::server::session_id::SessionId;
-use crate::util::{try_block_in_place, DesktopUpdate};
+use crate::util::{try_block_in_place, DesktopUpdate, UnwrappedRefMut};
 use crate::video::encoder::jpeg::JpegEncoder;
 use crate::video::encoder::EncoderStage;
 use anyhow::{bail, Context, Result};
@@ -27,74 +28,104 @@ use regex::Regex;
 use rustc_hash::FxHashMap;
 use std::collections::hash_map::Entry;
 use std::convert::Infallible;
-use std::sync::{Arc, Mutex};
-use tokio::io::{AsyncRead, AsyncWrite};
-use tokio::sync::mpsc;
-use tokio::task::JoinHandle;
+use std::net::SocketAddr;
+use std::rc::Rc;
+use std::time::Duration;
+use tokio::net::{TcpListener, TcpStream};
+use tokio::sync::{mpsc, watch};
+use tokio::task::{JoinHandle, JoinSet};
 
 pub struct TwilightServer {
-    random: parking_lot::Mutex<Option<StdRng>>,
-    looper: tokio::sync::Mutex<Option<JoinHandle<Result<()>>>>,
-    sessions: Mutex<FxHashMap<SessionId, Arc<Session>>>,
+    random: RefCell<Option<StdRng>>,
+    capture_worker: RefCell<Option<JoinHandle<Result<()>>>>,
+    workers: RefCell<JoinSet<Result<()>>>,
+    sessions: RefCell<FxHashMap<SessionId, Rc<Session>>>,
+    shutdown_tx: watch::Sender<bool>,
+    shutdown_rx: watch::Receiver<bool>,
 }
 
 impl TwilightServer {
-    pub fn new() -> Result<Arc<Self>> {
-        Ok(Arc::new(TwilightServer {
-            random: parking_lot::Mutex::new(None),
-            looper: tokio::sync::Mutex::new(None),
-            sessions: Mutex::new(Default::default()),
+    pub fn new() -> Result<Rc<Self>> {
+        let (shutdown_tx, shutdown_rx) = watch::channel(false);
+
+        Ok(Rc::new(TwilightServer {
+            random: RefCell::new(None),
+            capture_worker: RefCell::new(None),
+            workers: RefCell::new(JoinSet::new()),
+            sessions: RefCell::new(Default::default()),
+            shutdown_tx,
+            shutdown_rx,
         }))
     }
 
-    pub async fn add_conn<RW>(self: &Arc<Self>, stream: RW) -> Result<()>
-    where
-        RW: AsyncRead + AsyncWrite + Send + Unpin + 'static,
-    {
-        let this = Arc::clone(self);
+    pub async fn add_listener(self: &Rc<Self>, port: u16) -> Result<()> {
+        let listener = TcpListener::bind(("127.0.0.1", port)).await?;
 
-        let _worker = tokio::task::spawn(async move {
-            Http::new()
-                .http2_enable_connect_protocol()
-                .serve_connection(stream, service_fn(move |x| service(x, Arc::clone(&this))))
-                .with_upgrades()
-                .await
+        let this = Rc::clone(self);
+        let mut shutdown = self.shutdown_rx.clone();
+
+        if *shutdown.borrow() {
+            return Ok(());
+        }
+
+        self.workers.borrow_mut().spawn_local(async move {
+            while !*shutdown.borrow() {
+                let x = tokio::select! {
+                    biased;
+                    _ = shutdown.changed() => break,
+                    x = listener.accept() => x,
+                };
+
+                if *shutdown.borrow() {
+                    return Ok(());
+                }
+
+                let inner_this = Rc::clone(&this);
+                this.workers.borrow_mut().spawn_local(async move {
+                    let this = inner_this;
+
+                    // CLion can't infer type from tokio::select!
+                    let (stream, _addr): (TcpStream, SocketAddr) = x?;
+
+                    Http::new()
+                        .with_executor(LocalExec)
+                        .http1_header_read_timeout(Duration::from_secs(30))
+                        .serve_connection(stream, service_fn(move |x| service(x, Rc::clone(&this))))
+                        .with_upgrades()
+                        .await
+                        .map_err(|e| e.into())
+                });
+            }
+
+            Ok(())
         });
 
         Ok(())
     }
 
-    pub async fn is_running(&self) -> bool {
-        false
-    }
-
-    pub async fn close(self) -> Result<()> {
-        todo!()
-    }
-
-    pub async fn join_all(&self) {
-        let mut guard = self.looper.lock().await;
-        if let Some(x) = guard.as_mut() {
-            x.await.unwrap().unwrap();
-            guard.take();
+    #[allow(clippy::await_holding_refcell_ref)]
+    pub async fn shutdown(&self) {
+        //TODO: Come up with more clever way to do this (without that warning)
+        self.shutdown_tx.send_replace(true);
+        let mut workers = self.workers.borrow_mut();
+        while let Some(task) = workers.join_next().await {
+            let task = task.expect("task failed");
+            if let Err(e) = task {
+                println!("{e:?}");
+            }
         }
     }
-}
 
-impl TwilightServer {
-    fn random(&self) -> parking_lot::MappedMutexGuard<StdRng> {
-        let mut mutex = self.random.lock();
-        if mutex.is_none() {
-            *mutex = Some(StdRng::from_entropy());
+    fn random(&self) -> UnwrappedRefMut<Option<StdRng>> {
+        let mut rng = self.random.borrow_mut();
+        if rng.is_none() {
+            *rng = Some(StdRng::from_entropy());
         }
-        parking_lot::MutexGuard::map(mutex, |x| {
-            x.as_mut()
-                .expect("safe because the value was just initialized")
-        })
+        UnwrappedRefMut::new(rng).expect("checked above")
     }
 
-    fn assign_session(&self, session: Arc<Session>) -> SessionId {
-        let mut sessions = self.sessions.lock().unwrap();
+    fn assign_session(&self, session: Rc<Session>) -> SessionId {
+        let mut sessions = self.sessions.borrow_mut();
         loop {
             let session_id = SessionId::from_random(&mut *self.random());
             match sessions.entry(session_id.clone()) {
@@ -108,9 +139,27 @@ impl TwilightServer {
     }
 }
 
+impl Drop for TwilightServer {
+    fn drop(&mut self) {
+        assert!(self.workers.borrow_mut().is_empty(), "TwilightServer dropped without shutdown");
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct LocalExec;
+
+impl<F> hyper::rt::Executor<F> for LocalExec
+    where
+        F: std::future::Future + 'static,
+{
+    fn execute(&self, fut: F) {
+        tokio::task::spawn_local(fut);
+    }
+}
+
 async fn service(
     req: Request<Body>,
-    server: Arc<TwilightServer>,
+    server: Rc<TwilightServer>,
 ) -> Result<Response<Body>, Infallible> {
     let prefix = "";
 
@@ -174,7 +223,7 @@ fn handle_error(code: StatusCode) -> Response<Body> {
     res
 }
 
-async fn handle_auth(req: Request<Body>, server: Arc<TwilightServer>) -> Response<Body> {
+async fn handle_auth(req: Request<Body>, server: Rc<TwilightServer>) -> Response<Body> {
     let query = req.uri().query().unwrap_or("");
 
     let mut types = query.split('&').filter_map(|seg| {
@@ -203,7 +252,7 @@ async fn handle_auth(req: Request<Body>, server: Arc<TwilightServer>) -> Respons
     }
 }
 
-async fn handle_auth_username(req: Request<Body>, server: Arc<TwilightServer>) -> Response<Body> {
+async fn handle_auth_username(req: Request<Body>, server: Rc<TwilightServer>) -> Response<Body> {
     const MAX_LEN: usize = 256;
 
     if *req.method() != Method::POST {
@@ -240,7 +289,7 @@ async fn handle_auth_username(req: Request<Body>, server: Arc<TwilightServer>) -
         return handle_error(StatusCode::BAD_REQUEST);
     }
 
-    let session = Arc::new(Session { username });
+    let session = Rc::new(Session { username });
     let session_id = server.assign_session(session);
     let set_session = make_set_cookie_session(&session_id, using_https);
 
@@ -250,7 +299,7 @@ async fn handle_auth_username(req: Request<Body>, server: Arc<TwilightServer>) -
     res
 }
 
-async fn handle_stream(mut req: Request<Body>, server: Arc<TwilightServer>) -> Response<Body> {
+async fn handle_stream(mut req: Request<Body>, server: Rc<TwilightServer>) -> Response<Body> {
     if *req.method() != Method::GET {
         return handle_error(StatusCode::METHOD_NOT_ALLOWED);
     }
@@ -262,19 +311,17 @@ async fn handle_stream(mut req: Request<Body>, server: Arc<TwilightServer>) -> R
     let resolution;
     let (tx, rx) = mpsc::channel(1);
 
-    // initialize looper
+    // initialize capture_worker
     {
-        let mut looper = server.looper.lock().await;
-        if let Some(handle) = looper.as_mut() {
+        let prev_worker = server.capture_worker.borrow_mut().take();
+        if let Some(handle) = prev_worker {
             if !handle.is_finished() {
                 //TODO: Allow multiple connections
                 let mut res = Response::new(Body::from("client already connected"));
                 *res.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
                 return res;
             } else {
-                looper
-                    .take()
-                    .expect("checked above")
+                handle
                     .await
                     .unwrap()
                     .unwrap();
@@ -289,7 +336,7 @@ async fn handle_stream(mut req: Request<Body>, server: Arc<TwilightServer>) -> R
 
         let mut encoder = JpegEncoder::new(resolution.0, resolution.1, true).unwrap();
 
-        *looper = Some(tokio::task::spawn(async move {
+        *server.capture_worker.borrow_mut() = Some(tokio::task::spawn(async move {
             while let Some(reader) = pipeline.reader() {
                 match reader.recv().await {
                     None => break,
@@ -317,7 +364,7 @@ async fn handle_stream(mut req: Request<Body>, server: Arc<TwilightServer>) -> R
         }
     };
 
-    tokio::task::spawn(async move {
+    tokio::task::spawn_local(async move {
         websocket_io(websocket, server, resolution, rx)
             .await
             .unwrap();
@@ -328,7 +375,7 @@ async fn handle_stream(mut req: Request<Body>, server: Arc<TwilightServer>) -> R
 
 async fn websocket_io(
     sock: HyperWebsocket,
-    _server: Arc<TwilightServer>,
+    _server: Rc<TwilightServer>,
     resolution: (u32, u32),
     mut rx: mpsc::Receiver<DesktopUpdate<Vec<u8>>>,
 ) -> Result<()> {
