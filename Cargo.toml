@@ -25,20 +25,11 @@ thiserror = "1.0.38"
 tokio = { version = "1.25.0", features = ["full"] }
 tokio-tungstenite = "0.18.0"
 tungstenite = "0.18.0"
+turbojpeg = "0.5.2"
 ultraviolet = { version = "0.9.0", features = [ "int", "bytemuck" ] }
 url = "2.3.1"
 winit = "0.28.1"
 wgpu = "0.15.0"
-
-[target.'cfg(windows)'.dependencies.turbojpeg]
-version = "0.5.2"
-default-features = false
-features = [ "cmake" ]
-
-[target.'cfg(not(windows))'.dependencies.turbojpeg]
-version = "0.5.2"
-default-features = false
-features = [ "pkg-config", "require-simd" ]
 
 [dependencies.windows]
 version = "0.44.0"
