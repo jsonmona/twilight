@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 anyhow = { version = "1.0.68", features = ["backtrace"] }
 async-trait = "0.1.64"
-bytemuck = { version = "1.13.0", features = ["derive"] }
+bytemuck = { version = "1.13.0", features = ["derive", "extern_crate_std"] }
 capnp = "0.16.0"
 cfg-if = "1.0.0"
 cookie = "0.17.0"

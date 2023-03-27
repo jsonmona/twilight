@@ -1,10 +1,11 @@
-use crate::util::DesktopUpdate;
+use crate::util::{DesktopUpdate, PerformanceMonitor};
 use crate::video::capture::{CaptureStage, GdiCaptureStage};
 use crate::video::encoder::jpeg::JpegEncoder;
 use crate::video::encoder::EncoderStage;
 use anyhow::Result;
 use std::sync::mpsc;
 use std::sync::mpsc::TrySendError;
+use std::time::{Duration, Instant};
 
 pub type CapturePipelineOutput = (
     u32,
@@ -23,12 +24,28 @@ pub fn capture_pipeline() -> Result<CapturePipelineOutput> {
         resolution_tx.send(capture.resolution())?;
         drop(resolution_tx);
 
+        let mut perf = PerformanceMonitor::new();
+        let mut last_print = Instant::now();
+
         let mut prev = None;
         loop {
-            let update = capture.next()?;
-            let (update, desktop) = update.split();
-            let desktop = desktop.copied();
-            let update = update.with_desktop(desktop);
+            let curr_time = Instant::now();
+            if Duration::from_millis(10000) < curr_time - last_print {
+                last_print = curr_time;
+                if let Some(x) = perf.get() {
+                    println!("Capture {} ms", x.avg.as_millis());
+                }
+            }
+
+            let update = {
+                let _zone = perf.start_zone();
+
+                let update = capture.next()?;
+                let (update, desktop) = update.split();
+                let desktop = desktop.copied();
+                update.with_desktop(desktop)
+            };
+
             match img_tx.try_send(update) {
                 Ok(_) => continue,
                 Err(e) => match e {
@@ -54,10 +71,26 @@ pub fn capture_pipeline() -> Result<CapturePipelineOutput> {
     std::thread::spawn(move || -> Result<()> {
         let mut encoder = JpegEncoder::new(w, h, true)?;
 
+        let mut perf = PerformanceMonitor::new();
+        let mut last_print = Instant::now();
+
         while let Ok(update) = img_rx.recv() {
-            let (update, img) = update.split();
-            let img = encoder.encode(img)?;
-            let update = update.with_desktop(img);
+            let curr_time = Instant::now();
+            if Duration::from_millis(10000) < curr_time - last_print {
+                last_print = curr_time;
+                if let Some(x) = perf.get() {
+                    println!("Encoder {} ms", x.avg.as_millis());
+                }
+            }
+
+            let update = {
+                let _guard = perf.start_zone();
+
+                let (update, img) = update.split();
+                let img = encoder.encode(img)?;
+                update.with_desktop(img)
+            };
+
             encoded_tx.blocking_send(update)?;
         }
 
