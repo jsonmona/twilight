@@ -10,7 +10,7 @@ pub struct DisplayState {
 }
 
 impl DisplayState {
-    // must be called from main thread (metal specific)
+    /// Must be called from main thread
     pub async fn new(window: &Window) -> Result<Self> {
         let size = window.inner_size();
 

@@ -1,13 +1,14 @@
-use tokio::task::LocalSet;
-use twilight::util::NonSend;
+use tokio::runtime::Runtime;
 
-#[tokio::main]
-async fn main() {
+fn main() {
     env_logger::init();
 
-    let main_thread = NonSend::new();
-    let local = LocalSet::new();
+    let runtime = Runtime::new().expect("starting tokio runtime");
+    let rt = runtime.handle().clone();
 
-    local.run_until(twilight::viewer::launch(main_thread)).await;
-    local.await;
+    twilight::viewer::launch(
+        rt,
+        "127.0.0.1".parse().expect("valid localhost address"),
+        6497,
+    );
 }

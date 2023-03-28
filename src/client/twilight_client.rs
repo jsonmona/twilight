@@ -3,16 +3,14 @@ use crate::image::{ColorFormat, ImageBuf};
 use crate::network::util::parse_msg;
 use crate::schema::video::{Coord2f, Coord2u, NotifyVideoStart, VideoCodec, VideoFrame};
 use crate::util::{CursorShape, CursorState, DesktopUpdate};
-use anyhow::{bail, ensure, Context, Result};
-
-use hyper::body::Bytes;
-use hyper::Method;
-
-use std::future::Future;
-
 use crate::video::decoder::jpeg::JpegDecoder;
 use crate::video::decoder::DecoderStage;
-use tokio::sync::watch;
+use anyhow::{anyhow, bail, ensure, Context, Result};
+use hyper::body::Bytes;
+use hyper::Method;
+use std::future::Future;
+use std::rc::Rc;
+use tokio::sync::{mpsc, watch};
 use tokio::task::JoinHandle;
 
 #[derive(Debug)]
@@ -22,7 +20,7 @@ pub enum TwilightClientEvent {
     Closed(Result<()>),
 }
 
-type EventCb = Box<dyn Fn(TwilightClientEvent) + Send>;
+type EventCb = Rc<dyn Fn(TwilightClientEvent)>;
 
 pub struct TwilightClient {
     shutdown: watch::Sender<bool>,
@@ -30,19 +28,19 @@ pub struct TwilightClient {
 }
 
 impl TwilightClient {
-    pub fn new<Conn, ConnFut>(callback: EventCb, callback2: EventCb, conn: ConnFut) -> Self
+    pub fn new<Conn, ConnFut>(callback: EventCb, conn: ConnFut) -> Self
     where
         Conn: ServerConnection,
         ConnFut: Future<Output = Result<Conn>> + Send + 'static,
     {
         let (tx, rx) = watch::channel(false);
 
-        let worker = tokio::task::spawn(async move {
+        let worker = tokio::task::spawn_local(async move {
             let result = match conn.await {
-                Ok(c) => worker(c, rx, callback).await,
+                Ok(c) => worker(c, rx, Rc::clone(&callback)).await,
                 Err(e) => Err(e),
             };
-            callback2(TwilightClientEvent::Closed(result));
+            callback(TwilightClientEvent::Closed(result));
         });
 
         TwilightClient {
@@ -50,6 +48,34 @@ impl TwilightClient {
             worker,
         }
     }
+}
+
+fn decoder_pipeline(
+    w: u32,
+    h: u32,
+    codec: VideoCodec,
+) -> (
+    mpsc::Sender<DesktopUpdate<Bytes>>,
+    mpsc::Receiver<DesktopUpdate<ImageBuf>>,
+) {
+    assert_eq!(codec, VideoCodec::Jpeg);
+
+    let (data_tx, mut data_rx) = mpsc::channel::<DesktopUpdate<Bytes>>(1);
+    let (img_tx, img_rx) = mpsc::channel(1);
+
+    std::thread::spawn(move || -> Result<()> {
+        let mut decoder = JpegDecoder::new(w, h)?;
+        while let Some(update) = data_rx.blocking_recv() {
+            let img = decoder.decode(&update.desktop)?;
+            let update = update.with_desktop(img);
+            img_tx
+                .blocking_send(update)
+                .map_err(|_| anyhow!("img_rx closed"))?;
+        }
+        Ok(())
+    });
+
+    (data_tx, img_rx)
 }
 
 async fn worker<Conn: ServerConnection>(
@@ -88,12 +114,23 @@ async fn worker<Conn: ServerConnection>(
         .resolution()
         .cloned()
         .context("resolution not present")?;
+
     callback(TwilightClientEvent::Connected {
         width: resolution.width(),
         height: resolution.height(),
     });
 
-    let mut decoder = JpegDecoder::new(resolution.width(), resolution.height())?;
+    let (data_tx, mut img_rx) =
+        decoder_pipeline(resolution.width(), resolution.height(), desktop_codec);
+
+    let callback_inner = Rc::clone(&callback);
+    let decoder = tokio::task::spawn_local(async move {
+        let callback = callback_inner;
+
+        while let Some(img) = img_rx.recv().await {
+            callback(TwilightClientEvent::NextFrame(img))
+        }
+    });
 
     loop {
         let msg = tokio::select! {
@@ -102,6 +139,7 @@ async fn worker<Conn: ServerConnection>(
             x = stream.recv() => x,
         };
 
+        // None => normal close
         let msg = match msg {
             Some(x) => x?,
             None => break,
@@ -124,9 +162,6 @@ async fn worker<Conn: ServerConnection>(
             TryInto::<u64>::try_into(payload.len())? == frame.video_bytes(),
             "Video frame length does not match"
         );
-
-        assert_eq!(desktop_codec, VideoCodec::Jpeg);
-        let desktop_img = decoder.decode(&payload)?;
 
         let update = DesktopUpdate {
             cursor: frame.cursor_update().map(|x| {
@@ -156,11 +191,14 @@ async fn worker<Conn: ServerConnection>(
                     }),
                 }
             }),
-            desktop: desktop_img,
+            desktop: payload,
         };
 
-        callback(TwilightClientEvent::NextFrame(update));
+        data_tx.send(update).await?;
     }
+
+    drop(data_tx);
+    decoder.await?;
 
     Ok(())
 }
