@@ -1,7 +1,7 @@
+use bytemuck::{Pod, Zeroable};
 use std::num::TryFromIntError;
 use std::ops::{Add, Sub};
 use std::time::Duration;
-use bytemuck::{Pod, Zeroable};
 
 #[derive(Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Zeroable, Pod)]
 #[repr(transparent)]

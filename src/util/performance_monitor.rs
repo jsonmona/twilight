@@ -1,6 +1,6 @@
+use crate::util::micros::Micros;
 use std::fmt::{Debug, Formatter};
 use std::time::Instant;
-use crate::util::micros::Micros;
 
 #[derive(Clone, Debug)]
 pub struct PerformanceStats {
@@ -68,11 +68,7 @@ impl PerformanceMonitor {
         accum /= self.samples.len() as u64;
         let avg = Micros::from_micros(accum as u32);
 
-        Some(PerformanceStats {
-            min,
-            max,
-            avg,
-        })
+        Some(PerformanceStats { min, max, avg })
     }
 }
 

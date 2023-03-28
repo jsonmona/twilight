@@ -40,5 +40,13 @@ features = [
     "Win32_UI_HiDpi",
 ]
 
+[dev-dependencies]
+criterion = { version = "0.4", features = ["html_reports"] }
+rand_xoshiro = "0.6.0"
+
 [profile.dev]
 opt-level = 1
+
+[[bench]]
+name = "jpeg"
+harness = false
