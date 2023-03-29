@@ -3,7 +3,7 @@ use crate::util::DesktopUpdate;
 use crate::video::capture::CaptureStage;
 use anyhow::{ensure, Context, Result};
 use std::mem::zeroed;
-use std::ptr::{slice_from_raw_parts};
+use std::ptr::slice_from_raw_parts;
 use windows::core::Interface;
 use windows::Win32::Graphics::Direct3D::*;
 use windows::Win32::Graphics::Direct3D11::*;
@@ -12,9 +12,9 @@ use windows::Win32::Graphics::Dxgi::*;
 
 #[derive(Debug)]
 pub struct DxgiCaptureStage {
-    adapter: IDXGIAdapter1,
-    output: IDXGIOutput1,
-    device: ID3D11Device,
+    _adapter: IDXGIAdapter1,
+    _output: IDXGIOutput1,
+    _device: ID3D11Device,
     ctx: ID3D11DeviceContext,
     output_duplication: IDXGIOutputDuplication,
     desc: DXGI_OUTDUPL_DESC,
@@ -118,9 +118,9 @@ impl DxgiCaptureStage {
         }
 
         Ok(DxgiCaptureStage {
-            adapter,
-            output,
-            device,
+            _adapter: adapter,
+            _output: output,
+            _device: device,
             ctx,
             output_duplication,
             desc,

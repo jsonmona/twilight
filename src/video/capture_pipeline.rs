@@ -1,11 +1,11 @@
-use crate::util::{DesktopUpdate, PerformanceMonitor};
+use crate::util::{spawn_thread_asyncify, DesktopUpdate, PerformanceMonitor, Timer};
 use crate::video::capture::{CaptureStage, DxgiCaptureStage};
 use crate::video::encoder::jpeg::JpegEncoder;
 use crate::video::encoder::EncoderStage;
 use anyhow::Result;
 use std::sync::mpsc;
 use std::sync::mpsc::TrySendError;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 pub type CapturePipelineOutput = (
     u32,
@@ -18,20 +18,18 @@ pub fn capture_pipeline() -> Result<CapturePipelineOutput> {
     let (img_tx, img_rx) = mpsc::sync_channel(1);
     let (encoded_tx, encoded_rx) = tokio::sync::mpsc::channel(1);
 
-    let capture_stage = std::thread::spawn(move || {
+    let capture_stage = spawn_thread_asyncify(move || {
         let mut capture = DxgiCaptureStage::new()?;
 
         resolution_tx.send(capture.resolution())?;
         drop(resolution_tx);
 
         let mut perf = PerformanceMonitor::new();
-        let mut last_print = Instant::now();
+        let mut pref_timer = Timer::new(Duration::from_secs(10));
 
         let mut prev = None;
         loop {
-            let curr_time = Instant::now();
-            if Duration::from_millis(10000) < curr_time - last_print {
-                last_print = curr_time;
+            if pref_timer.poll() {
                 if let Some(x) = perf.get() {
                     println!("Capture {} ms", x.avg.as_millis());
                 }
@@ -65,19 +63,21 @@ pub fn capture_pipeline() -> Result<CapturePipelineOutput> {
         anyhow::Ok(())
     });
 
+    tokio::task::spawn_local(async move {
+        capture_stage.await.unwrap();
+    });
+
     let resolution = resolution_rx.recv()?;
     let (w, h) = resolution;
 
-    let encode_stage = std::thread::spawn(move || {
+    let encode_stage = spawn_thread_asyncify(move || {
         let mut encoder = JpegEncoder::new(w, h, true)?;
 
         let mut perf = PerformanceMonitor::new();
-        let mut last_print = Instant::now();
+        let mut pref_timer = Timer::new(Duration::from_secs(10));
 
         while let Ok(update) = img_rx.recv() {
-            let curr_time = Instant::now();
-            if Duration::from_millis(10000) < curr_time - last_print {
-                last_print = curr_time;
+            if pref_timer.poll() {
                 if let Some(x) = perf.get() {
                     println!("Encoder {} ms", x.avg.as_millis());
                 }
@@ -98,17 +98,7 @@ pub fn capture_pipeline() -> Result<CapturePipelineOutput> {
     });
 
     tokio::task::spawn_local(async move {
-        while !capture_stage.is_finished() {
-            tokio::time::sleep(Duration::from_millis(150)).await;
-        }
-        capture_stage.join().unwrap().unwrap();
-    });
-
-    tokio::task::spawn_local(async move {
-        while !encode_stage.is_finished() {
-            tokio::time::sleep(Duration::from_millis(150)).await;
-        }
-        encode_stage.join().unwrap().unwrap();
+        encode_stage.await.unwrap();
     });
 
     Ok((w, h, encoded_rx))
