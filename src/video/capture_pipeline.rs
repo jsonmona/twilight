@@ -1,5 +1,5 @@
 use crate::util::{DesktopUpdate, PerformanceMonitor};
-use crate::video::capture::{CaptureStage, GdiCaptureStage};
+use crate::video::capture::{CaptureStage, DxgiCaptureStage};
 use crate::video::encoder::jpeg::JpegEncoder;
 use crate::video::encoder::EncoderStage;
 use anyhow::Result;
@@ -18,8 +18,8 @@ pub fn capture_pipeline() -> Result<CapturePipelineOutput> {
     let (img_tx, img_rx) = mpsc::sync_channel(1);
     let (encoded_tx, encoded_rx) = tokio::sync::mpsc::channel(1);
 
-    std::thread::spawn(move || {
-        let mut capture = GdiCaptureStage::new()?;
+    let capture_stage = std::thread::spawn(move || {
+        let mut capture = DxgiCaptureStage::new()?;
 
         resolution_tx.send(capture.resolution())?;
         drop(resolution_tx);
@@ -68,7 +68,7 @@ pub fn capture_pipeline() -> Result<CapturePipelineOutput> {
     let resolution = resolution_rx.recv()?;
     let (w, h) = resolution;
 
-    std::thread::spawn(move || -> Result<()> {
+    let encode_stage = std::thread::spawn(move || {
         let mut encoder = JpegEncoder::new(w, h, true)?;
 
         let mut perf = PerformanceMonitor::new();
@@ -95,6 +95,20 @@ pub fn capture_pipeline() -> Result<CapturePipelineOutput> {
         }
 
         anyhow::Ok(())
+    });
+
+    tokio::task::spawn_local(async move {
+        while !capture_stage.is_finished() {
+            tokio::time::sleep(Duration::from_millis(150)).await;
+        }
+        capture_stage.join().unwrap().unwrap();
+    });
+
+    tokio::task::spawn_local(async move {
+        while !encode_stage.is_finished() {
+            tokio::time::sleep(Duration::from_millis(150)).await;
+        }
+        encode_stage.join().unwrap().unwrap();
     });
 
     Ok((w, h, encoded_rx))
