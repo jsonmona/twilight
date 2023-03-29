@@ -1,7 +1,6 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use hyper::body::Bytes;
-
 use hyper::{Method, StatusCode};
 
 //TODO: Remove these async_trait when async_fn_in_traits stabilizes

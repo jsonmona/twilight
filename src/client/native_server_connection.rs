@@ -8,12 +8,9 @@ use futures_util::{SinkExt, StreamExt};
 use hyper::body::{Bytes, HttpBody};
 use hyper::client::conn::SendRequest;
 use hyper::header::{CONNECTION, HOST, UPGRADE};
-
 use hyper::upgrade::Upgraded;
 use hyper::{Body, Method, Request, StatusCode};
-
 use std::net::IpAddr;
-
 use tokio::net::TcpStream;
 use tokio::task::JoinHandle;
 use tokio_tungstenite::WebSocketStream;

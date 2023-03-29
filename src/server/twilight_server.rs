@@ -1,8 +1,5 @@
 use crate::network::util::send_msg_with;
-use crate::schema::video::{
-    Coord2f, Coord2u, CursorShape, CursorShapeArgs, CursorUpdate, CursorUpdateArgs,
-    NotifyVideoStart, NotifyVideoStartArgs, Size2u, VideoCodec, VideoFrame, VideoFrameArgs,
-};
+use crate::schema::video::*;
 use crate::server::session_id::SessionId;
 use crate::util::{DesktopUpdate, UnwrappedRefMut};
 use crate::video::capture_pipeline;
