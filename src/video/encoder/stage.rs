@@ -1,10 +1,10 @@
-use crate::image::ImageBuf;
+use crate::image::Image;
 use anyhow::Result;
 use std::fmt::Debug;
 
 pub trait EncoderStage: Send + Debug {
     fn resolution(&self) -> (u32, u32);
-    fn encode(&mut self, img: ImageBuf) -> Result<Vec<u8>>;
+    fn encode(&mut self, img: Image<&[u8]>) -> Result<Vec<u8>>;
 
     fn width(&self) -> u32 {
         self.resolution().0

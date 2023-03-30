@@ -17,6 +17,16 @@ impl<T> DesktopUpdate<T> {
         )
     }
 
+    pub fn clone_split(&self) -> (DesktopUpdate<()>, &T) {
+        (
+            DesktopUpdate {
+                cursor: self.cursor.clone(),
+                desktop: (),
+            },
+            &self.desktop,
+        )
+    }
+
     pub fn with_desktop<R>(self, desktop: R) -> DesktopUpdate<R> {
         DesktopUpdate {
             cursor: self.cursor,

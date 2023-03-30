@@ -1,4 +1,4 @@
-use crate::image::{ColorFormat, ImageBuf};
+use crate::image::{ColorFormat, Image};
 use crate::util::AsUsize;
 use crate::video::encoder::stage::EncoderStage;
 use anyhow::{ensure, Context, Result};
@@ -34,7 +34,7 @@ impl EncoderStage for JpegEncoder {
         (self.width, self.height)
     }
 
-    fn encode(&mut self, img: ImageBuf) -> Result<Vec<u8>> {
+    fn encode(&mut self, img: Image<&[u8]>) -> Result<Vec<u8>> {
         ensure!(
             self.width == img.width && self.height == img.height,
             "image resolution changed from {}x{} to {}x{}",
@@ -48,7 +48,7 @@ impl EncoderStage for JpegEncoder {
         let h = self.height.as_usize();
 
         let image = turbojpeg::Image {
-            pixels: img.data.as_slice(),
+            pixels: img.data,
             width: w,
             pitch: img.stride.as_usize(),
             height: h,

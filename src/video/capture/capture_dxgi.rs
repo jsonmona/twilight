@@ -204,7 +204,7 @@ impl CaptureStage for DxgiCaptureStage {
 
             match self
                 .output_duplication
-                .AcquireNextFrame(150, &mut frame_info, &mut desktop)
+                .AcquireNextFrame(250, &mut frame_info, &mut desktop)
             {
                 Ok(_) => {
                     let mut cursor = None;

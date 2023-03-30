@@ -83,7 +83,7 @@ pub fn capture_pipeline() -> Result<CapturePipelineOutput> {
             let update = {
                 let _guard = perf.start_zone();
 
-                update.and_then_desktop(|x| encoder.encode(x))?
+                update.and_then_desktop(|x| encoder.encode(x.as_data_ref()))?
             };
 
             encoded_tx.blocking_send(update)?;
