@@ -34,6 +34,16 @@ impl<T> DesktopUpdate<T> {
         }
     }
 
+    pub fn and_then_desktop<F, R, E>(self, map_fn: F) -> Result<DesktopUpdate<R>, E>
+    where
+        F: FnOnce(T) -> Result<R, E>,
+    {
+        Ok(DesktopUpdate {
+            cursor: self.cursor,
+            desktop: map_fn(self.desktop)?,
+        })
+    }
+
     pub fn collapse_from(&mut self, prev: Self) {
         if self.cursor.is_none() {
             self.cursor = prev.cursor;

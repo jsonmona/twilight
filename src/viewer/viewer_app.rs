@@ -1,5 +1,5 @@
 use crate::client::TwilightClientEvent;
-use crate::util::{DesktopUpdate, NonSend};
+use crate::util::NonSend;
 use crate::viewer::desktop_view::DesktopView;
 use crate::viewer::display_state::DisplayState;
 use cfg_if::cfg_if;
@@ -69,11 +69,6 @@ impl ViewerApp {
                         println!("Connected to {width}x{height}");
                     }
                     TwilightClientEvent::NextFrame(update) => {
-                        let update = DesktopUpdate {
-                            cursor: update.cursor,
-                            desktop: update.desktop.copied(),
-                        };
-
                         window.request_redraw();
                         let state = display_state.as_mut().unwrap();
                         match desktop_view.as_mut() {

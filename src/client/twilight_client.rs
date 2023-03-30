@@ -66,8 +66,7 @@ fn decoder_pipeline(
     std::thread::spawn(move || -> Result<()> {
         let mut decoder = JpegDecoder::new(w, h)?;
         while let Some(update) = data_rx.blocking_recv() {
-            let img = decoder.decode(&update.desktop)?;
-            let update = update.with_desktop(img);
+            let update = update.and_then_desktop(|x| decoder.decode(&x))?;
             img_tx
                 .blocking_send(update)
                 .map_err(|_| anyhow!("img_rx closed"))?;

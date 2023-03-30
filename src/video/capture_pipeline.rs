@@ -82,9 +82,7 @@ pub fn capture_pipeline() -> Result<CapturePipelineOutput> {
             let update = {
                 let _guard = perf.start_zone();
 
-                let (update, img) = update.split();
-                let img = encoder.encode(img)?;
-                update.with_desktop(img)
+                update.and_then_desktop(|x| encoder.encode(x))?
             };
 
             encoded_tx.blocking_send(update)?;
