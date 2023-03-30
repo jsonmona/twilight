@@ -3,6 +3,7 @@ use crate::util::NonSend;
 use crate::viewer::desktop_view::DesktopView;
 use crate::viewer::display_state::DisplayState;
 use cfg_if::cfg_if;
+use log::{error, info};
 use std::time::{Duration, Instant};
 use tokio::runtime::Handle;
 use winit::event;
@@ -66,7 +67,7 @@ impl ViewerApp {
                 Event::MainEventsCleared => {}
                 Event::UserEvent(kind) => match kind {
                     TwilightClientEvent::Connected { width, height } => {
-                        println!("Connected to {width}x{height}");
+                        info!("Connected to {width}x{height}");
                     }
                     TwilightClientEvent::NextFrame(update) => {
                         window.request_redraw();
@@ -93,7 +94,7 @@ impl ViewerApp {
                     let elapsed = Instant::now() - old_time;
                     if elapsed > Duration::from_secs(10) {
                         let fps = frames as f64 / elapsed.as_secs_f64();
-                        println!("Render FPS={fps:.2}");
+                        info!("Render FPS={fps:.2}");
                         old_time = Instant::now();
                         frames = 0;
                     }
@@ -110,11 +111,10 @@ impl ViewerApp {
                             state.reconfigure_surface();
                             window.request_redraw();
                         }
-                        Err(wgpu::SurfaceError::OutOfMemory) => {
-                            eprintln!("{:?}", wgpu::SurfaceError::OutOfMemory);
+                        Err(e) => {
+                            error!("{e}");
                             *control_flow = ControlFlow::ExitWithCode(1);
                         }
-                        Err(e) => eprintln!("{e:?}"),
                     }
                 }
                 Event::WindowEvent {

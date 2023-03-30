@@ -10,6 +10,7 @@ use hyper::client::conn::SendRequest;
 use hyper::header::{CONNECTION, HOST, UPGRADE};
 use hyper::upgrade::Upgraded;
 use hyper::{Body, Method, Request, StatusCode};
+use log::error;
 use std::net::IpAddr;
 use tokio::net::TcpStream;
 use tokio::task::JoinHandle;
@@ -140,7 +141,7 @@ impl MessageStream for NativeMessageStream {
                         if let Message::Binary(data) = msg {
                             return Some(Ok(data.into()));
                         } else {
-                            println!("Received message of wrong type: {msg:?}");
+                            error!("Received message of wrong type: {msg:?}");
                         }
                     }
                     Err(e) => return Some(Err(e.into())),

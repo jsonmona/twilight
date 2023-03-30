@@ -17,6 +17,7 @@ use hyper::{header, Body, Method, Request, Response, StatusCode};
 use hyper_tungstenite::tungstenite::Message;
 use hyper_tungstenite::HyperWebsocket;
 use lazy_static::lazy_static;
+use log::{debug, error};
 use rand::prelude::*;
 use regex::Regex;
 use rustc_hash::FxHashMap;
@@ -106,7 +107,7 @@ impl TwilightServer {
         while let Some(task) = workers.join_next().await {
             let task = task.expect("task failed");
             if let Err(e) = task {
-                println!("{e:?}");
+                error!("{e:?}");
             }
         }
     }
@@ -323,7 +324,7 @@ async fn handle_stream(mut req: Request<Body>, server: Rc<TwilightServer>) -> Re
     let (response, websocket) = match hyper_tungstenite::upgrade(&mut req, None) {
         Ok(x) => x,
         Err(e) => {
-            eprintln!("{e}");
+            error!("{}", e);
             return handle_error(StatusCode::INTERNAL_SERVER_ERROR);
         }
     };
@@ -373,10 +374,10 @@ async fn websocket_io(
 
             match msg {
                 Message::Binary(msg) => {
-                    println!("Received binary message {msg:?}");
+                    debug!("Received binary message {msg:?}");
                 }
                 Message::Pong(msg) => {
-                    println!("Received pong message {msg:?}");
+                    debug!("Received pong message {msg:?}");
                 }
                 Message::Ping(_) => { /* handled automatically; ignore */ }
                 Message::Text(_) => bail!("received text message"),

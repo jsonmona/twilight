@@ -3,6 +3,7 @@ use crate::video::capture::{CaptureStage, DxgiCaptureStage};
 use crate::video::encoder::jpeg::JpegEncoder;
 use crate::video::encoder::EncoderStage;
 use anyhow::Result;
+use log::info;
 use std::sync::mpsc;
 use std::sync::mpsc::TrySendError;
 use std::time::Duration;
@@ -31,7 +32,7 @@ pub fn capture_pipeline() -> Result<CapturePipelineOutput> {
         loop {
             if pref_timer.poll() {
                 if let Some(x) = perf.get() {
-                    println!("Capture {} ms", x.avg.as_millis());
+                    info!("Capture {} ms", x.avg.as_millis());
                 }
             }
 
@@ -75,7 +76,7 @@ pub fn capture_pipeline() -> Result<CapturePipelineOutput> {
         while let Ok(update) = img_rx.recv() {
             if pref_timer.poll() {
                 if let Some(x) = perf.get() {
-                    println!("Encoder {} ms", x.avg.as_millis());
+                    info!("Encoder {} ms", x.avg.as_millis());
                 }
             }
 

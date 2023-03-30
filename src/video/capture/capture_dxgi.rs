@@ -2,6 +2,7 @@ use crate::image::{ColorFormat, Image, ImageBuf};
 use crate::util::{CursorShape, CursorState, DesktopUpdate};
 use crate::video::capture::CaptureStage;
 use anyhow::{ensure, Context, Result};
+use log::{error, info};
 use std::ffi::c_void;
 use std::mem::zeroed;
 use std::ptr::slice_from_raw_parts;
@@ -49,7 +50,7 @@ impl DxgiCaptureStage {
             adapter.GetDesc1(&mut adapter_desc)?;
 
             let adapter_name = String::from_utf16_lossy(trim_null(&adapter_desc.Description));
-            println!("Selected adapter {adapter_name}");
+            info!("Selected adapter {adapter_name}");
 
             let primary_output = list_outputs(&adapter)?
                 .into_iter()
@@ -64,7 +65,7 @@ impl DxgiCaptureStage {
             output.GetDesc(&mut output_desc)?;
 
             let output_name = String::from_utf16_lossy(trim_null(&output_desc.DeviceName));
-            println!("Selected output {output_name}");
+            info!("Selected output {output_name}");
 
             let flags = D3D11_CREATE_DEVICE_SINGLETHREADED
                 | D3D11_CREATE_DEVICE_BGRA_SUPPORT
@@ -366,7 +367,7 @@ fn decode_cursor(shape_info: &DXGI_OUTDUPL_POINTER_SHAPE_INFO, buf: &[u8]) -> Cu
             }
         }
         _ => {
-            eprintln!("Unknown cursor shape type: {shape_info:?}");
+            error!("Unknown cursor shape type: {shape_info:?}");
             // use blank image
         }
     }

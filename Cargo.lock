@@ -2187,6 +2187,7 @@ dependencies = [
  "hyper",
  "hyper-tungstenite",
  "lazy_static",
+ "log",
  "parking_lot",
  "pollster",
  "rand",
