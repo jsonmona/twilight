@@ -1,6 +1,9 @@
 use crate::image::ColorFormat;
+use crate::util::AsUsize;
 use std::fmt::{Debug, Formatter};
 use std::ops::Deref;
+
+const ALIGNMENT: usize = 16;
 
 pub struct Image<D: Deref<Target = [u8]>> {
     pub width: u32,
@@ -72,8 +75,7 @@ impl ImageBuf {
                 (height + height / 2) * stride
             }
         }
-        .try_into()
-        .expect("image bytes count does not fit into usize");
+        .as_usize();
 
         ImageBuf {
             width,
@@ -94,6 +96,12 @@ impl<D: Deref<Target = [u8]>> Image<D> {
             color_format,
             data,
         }
+    }
+
+    pub fn is_aligned(&self) -> bool {
+        (self.data.as_ptr() as usize) % ALIGNMENT == 0
+            && self.stride.as_usize() % ALIGNMENT == 0
+            && self.width * self.color_format.pixel_stride() <= self.stride
     }
 
     pub fn as_data_ref(&self) -> Image<&[u8]> {
@@ -134,18 +142,9 @@ impl<D: Deref<Target = [u8]>> Image<D> {
     }
 
     pub fn validate(&self) {
-        let height = self
-            .height
-            .try_into()
-            .expect("height does not fit into usize");
-        let _width: usize = self
-            .width
-            .try_into()
-            .expect("width does not fit into usize");
-        let stride = self
-            .stride
-            .try_into()
-            .expect("stride does not fit into usize");
+        let height = self.height.as_usize();
+        let _width: usize = self.width.as_usize();
+        let stride = self.stride.as_usize();
 
         let total_size =
             usize::checked_mul(height, stride).expect("total size does not fit into usize");

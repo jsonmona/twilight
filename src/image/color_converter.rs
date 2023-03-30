@@ -1,4 +1,5 @@
 use crate::image::{ColorFormat, Image};
+use crate::util::AsUsize;
 use std::ops::{Deref, DerefMut};
 
 pub fn convert_color<A, B>(src: &Image<A>, dst: &mut Image<B>)
@@ -42,15 +43,8 @@ where
     let data_src = src.data.deref();
     let data_dst = dst.data.deref_mut();
 
-    let height = src
-        .height
-        .try_into()
-        .expect("height too large to fit in usize");
-
-    let width = src
-        .width
-        .try_into()
-        .expect("width too large to fit in usize");
+    let height = src.height.as_usize();
+    let width = src.width.as_usize();
 
     let src_stride = usize::checked_mul(width, 4).expect("source stride too large to fit in usize");
     let dst_stride =
@@ -92,14 +86,8 @@ where
     let data_src = src.data.deref();
     let data_dst = dst.data.deref_mut();
 
-    let height = src
-        .height
-        .try_into()
-        .expect("height too large to fit in usize");
-    let width = src
-        .width
-        .try_into()
-        .expect("width too large to fit in usize");
+    let height = src.height.as_usize();
+    let width = src.width.as_usize();
     let src_stride = usize::checked_mul(width, 3).expect("source stride too large to fit in usize");
     let dst_stride =
         usize::checked_mul(width, 4).expect("destination stride too large to fit in usize");

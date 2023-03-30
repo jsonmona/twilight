@@ -1,3 +1,4 @@
+use crate::util::AsUsize;
 use anyhow::Result;
 use flatbuffers::{FlatBufferBuilder, Follow, Verifiable, WIPOffset};
 use futures_util::{Sink, SinkExt};
@@ -48,7 +49,7 @@ where
     T: 'buf + Follow<'buf, Inner = T> + Verifiable,
     R: AsyncRead + Unpin,
 {
-    let packet_len: usize = stream.read_u32_le().await?.try_into().unwrap();
+    let packet_len = stream.read_u32_le().await?.as_usize();
 
     if buf.len() < packet_len {
         buf.resize(packet_len, 0);

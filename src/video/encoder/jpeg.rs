@@ -1,4 +1,5 @@
 use crate::image::{ColorFormat, ImageBuf};
+use crate::util::AsUsize;
 use crate::video::encoder::stage::EncoderStage;
 use anyhow::{ensure, Context, Result};
 use turbojpeg::{Compressor, PixelFormat, Subsamp};
@@ -43,13 +44,13 @@ impl EncoderStage for JpegEncoder {
             img.height
         );
 
-        let w: usize = self.width.try_into()?;
-        let h: usize = self.height.try_into()?;
+        let w = self.width.as_usize();
+        let h = self.height.as_usize();
 
         let image = turbojpeg::Image {
             pixels: img.data.as_slice(),
             width: w,
-            pitch: img.stride.try_into()?,
+            pitch: img.stride.as_usize(),
             height: h,
             format: color_format_to_pixel_format(img.color_format)
                 .with_context(|| format!("unknown color format {:?}", img.color_format))?,

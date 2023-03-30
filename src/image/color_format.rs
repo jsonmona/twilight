@@ -31,4 +31,13 @@ impl ColorFormat {
             _ => None,
         }
     }
+
+    pub fn pixel_stride(self) -> u32 {
+        match self {
+            ColorFormat::Rgba8888 => 4,
+            ColorFormat::Bgra8888 => 4,
+            ColorFormat::Rgb24 => 3,
+            ColorFormat::Nv12 => 1,
+        }
+    }
 }

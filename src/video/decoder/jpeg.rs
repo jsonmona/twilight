@@ -1,4 +1,5 @@
 use crate::image::{ColorFormat, ImageBuf};
+use crate::util::AsUsize;
 use crate::video::decoder::DecoderStage;
 use anyhow::{ensure, Result};
 use turbojpeg::{Decompressor, PixelFormat};
@@ -29,11 +30,9 @@ impl DecoderStage for JpegDecoder {
 
     fn decode(&mut self, data: &[u8]) -> Result<ImageBuf> {
         let header = self.decompressor.read_header(data)?;
-        let w = usize::try_from(self.width)?;
-        let h = usize::try_from(self.height)?;
 
         ensure!(
-            w == header.width && h == header.height,
+            self.width.equals_usize(header.width) && self.height.equals_usize(header.height),
             "image resolution changed from {}x{} to {}x{}",
             self.width,
             self.height,
@@ -46,7 +45,7 @@ impl DecoderStage for JpegDecoder {
         let image = turbojpeg::Image {
             pixels: img.data.as_mut_slice(),
             width: header.width,
-            pitch: img.stride.try_into()?,
+            pitch: img.stride.as_usize(),
             height: header.height,
             format: PixelFormat::BGRA,
         };

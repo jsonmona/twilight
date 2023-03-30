@@ -1,3 +1,4 @@
+mod as_usize;
 mod cursor;
 mod desktop_update;
 mod micros;
@@ -7,6 +8,7 @@ mod spawn_thread_asyncify;
 mod timer;
 mod unwrapped_refmut;
 
+pub use as_usize::AsUsize;
 pub use cursor::{CursorShape, CursorState};
 pub use desktop_update::DesktopUpdate;
 pub use micros::Micros;

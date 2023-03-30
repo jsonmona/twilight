@@ -1,5 +1,5 @@
 use crate::image::{ColorFormat, Image, ImageBuf};
-use crate::util::{CursorShape, CursorState, DesktopUpdate};
+use crate::util::{AsUsize, CursorShape, CursorState, DesktopUpdate};
 use crate::video::capture::CaptureStage;
 use anyhow::{ensure, Context, Result};
 use log::{error, info};
@@ -165,7 +165,7 @@ impl DxgiCaptureStage {
         //TODO: Handle desktop rotation
         let slice = &*slice_from_raw_parts(
             info.pData as *const u8,
-            (info.RowPitch * self.height()).try_into()?,
+            (info.RowPitch * self.height()).as_usize(),
         );
         let img_ref = Image::new(
             self.width(),
@@ -210,7 +210,7 @@ impl CaptureStage for DxgiCaptureStage {
                     let mut cursor = None;
                     if frame_info.LastMouseUpdateTime != 0 || self.curr_img.is_none() {
                         let shape = if frame_info.PointerShapeBufferSize != 0 {
-                            let mut buf = vec![0u8; frame_info.PointerShapeBufferSize.try_into()?];
+                            let mut buf = vec![0u8; frame_info.PointerShapeBufferSize.as_usize()];
                             let mut buf_size = 0;
                             let mut shape_info = zeroed();
                             self.output_duplication.GetFramePointerShape(
@@ -349,16 +349,12 @@ fn decode_cursor(shape_info: &DXGI_OUTDUPL_POINTER_SHAPE_INFO, buf: &[u8]) -> Cu
 
             // flip alpha
             //TODO: Use SIMD or at least u32
-            let max_index: usize = (output.image.height * output.image.stride)
-                .try_into()
-                .expect("unable to cast u32 into usize");
+            let max_index = (output.image.height * output.image.stride).as_usize();
             assert!(max_index <= output.image.data.len());
             assert!(output.image.width * 4 <= output.image.stride);
             for i in 0..output.image.height {
                 for j in 0..output.image.width {
-                    let pos: usize = (i * output.image.stride + j * 4 + 3)
-                        .try_into()
-                        .expect("unable to cast u32 into usize");
+                    let pos = (i * output.image.stride + j * 4 + 3).as_usize();
                     unsafe {
                         let alpha = output.image.data.get_unchecked_mut(pos);
                         *alpha = 0xFF - *alpha;
@@ -378,20 +374,13 @@ fn decode_cursor(shape_info: &DXGI_OUTDUPL_POINTER_SHAPE_INFO, buf: &[u8]) -> Cu
 fn copy_color_data(dst: &mut ImageBuf, shape_info: &DXGI_OUTDUPL_POINTER_SHAPE_INFO, buf: &[u8]) {
     if shape_info.Pitch == shape_info.Width * 4 {
         // fast path
-        let total_len = (shape_info.Height * shape_info.Width * 4)
-            .try_into()
-            .expect("failed to cast u32 into usize");
+        let total_len = (shape_info.Height * shape_info.Width * 4).as_usize();
         assert_eq!(dst.data.len(), total_len);
         dst.data.copy_from_slice(&buf[..total_len]);
     } else {
         // copy line by line
-        let line_len: usize = (shape_info.Width * 4)
-            .try_into()
-            .expect("failed to cast u32 into usize");
-        let src_pitch: usize = shape_info
-            .Pitch
-            .try_into()
-            .expect("failed to cast u32 into usize");
+        let line_len = (shape_info.Width * 4).as_usize();
+        let src_pitch = shape_info.Pitch.as_usize();
         let mut src_offset = 0;
         let mut dst_offset = 0;
         for _ in 0..shape_info.Height {

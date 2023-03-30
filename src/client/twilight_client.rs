@@ -2,6 +2,7 @@ use crate::client::server_connection::{FetchResponse, MessageStream, ServerConne
 use crate::image::{ColorFormat, ImageBuf};
 use crate::network::util::parse_msg;
 use crate::schema::video::{Coord2f, Coord2u, NotifyVideoStart, VideoCodec, VideoFrame};
+use crate::util::AsUsize;
 use crate::util::{CursorShape, CursorState, DesktopUpdate};
 use crate::video::decoder::jpeg::JpegDecoder;
 use crate::video::decoder::DecoderStage;
@@ -158,7 +159,7 @@ async fn worker<Conn: ServerConnection>(
         };
 
         ensure!(
-            TryInto::<u64>::try_into(payload.len())? == frame.video_bytes(),
+            payload.len() == frame.video_bytes().as_usize(),
             "Video frame length does not match"
         );
 
