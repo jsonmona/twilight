@@ -1,5 +1,5 @@
 use crate::util::{spawn_thread_asyncify, DesktopUpdate, PerformanceMonitor, Timer};
-use crate::video::capture::{CaptureStage, GdiCaptureStage};
+use crate::video::capture::{CaptureStage, DxgiCaptureStage};
 use crate::video::encoder::jpeg::JpegEncoder;
 use crate::video::encoder::EncoderStage;
 use anyhow::Result;
@@ -19,7 +19,7 @@ pub fn capture_pipeline() -> Result<CapturePipelineOutput> {
     let (encoded_tx, encoded_rx) = tokio::sync::mpsc::channel(1);
 
     let capture_stage = spawn_thread_asyncify(move || {
-        let mut capture = GdiCaptureStage::new()?;
+        let mut capture = DxgiCaptureStage::new()?;
 
         resolution_tx.send(capture.resolution())?;
         drop(resolution_tx);
@@ -35,26 +35,22 @@ pub fn capture_pipeline() -> Result<CapturePipelineOutput> {
                 }
             }
 
-            let update = {
+            let mut update = {
                 let _zone = perf.start_zone();
 
                 let update = capture.next()?;
-                let (update, desktop) = update.split();
-                let desktop = desktop.copied();
-                update.with_desktop(desktop)
+                update.map_desktop(|x| x.copied())
             };
+
+            if let Some(x) = prev.take() {
+                update.collapse_from(x);
+            }
 
             match img_tx.try_send(update) {
                 Ok(_) => continue,
                 Err(e) => match e {
-                    TrySendError::Full(mut update) => {
-                        prev = match prev {
-                            Some(prev_update) => {
-                                update.collapse_from(prev_update);
-                                Some(update)
-                            }
-                            None => Some(update),
-                        };
+                    TrySendError::Full(update) => {
+                        prev = Some(update);
                     }
                     TrySendError::Disconnected(_) => break,
                 },
