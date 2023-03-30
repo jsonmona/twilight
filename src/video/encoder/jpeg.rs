@@ -35,13 +35,11 @@ impl EncoderStage for JpegEncoder {
 
     fn encode(&mut self, img: ImageBuf) -> Result<Vec<u8>> {
         ensure!(
-            self.width == img.width,
-            "image width changed to {}",
-            img.width
-        );
-        ensure!(
-            self.height == img.height,
-            "image height changed to {}",
+            self.width == img.width && self.height == img.height,
+            "image resolution changed from {}x{} to {}x{}",
+            self.width,
+            self.height,
+            img.width,
             img.height
         );
 

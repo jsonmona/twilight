@@ -29,13 +29,19 @@ impl DecoderStage for JpegDecoder {
 
     fn decode(&mut self, data: &[u8]) -> Result<ImageBuf> {
         let header = self.decompressor.read_header(data)?;
-        let h = u32::try_from(header.height)?;
-        let w = u32::try_from(header.width)?;
+        let w = usize::try_from(self.width)?;
+        let h = usize::try_from(self.height)?;
 
-        ensure!(self.width == w, "image width changed to {}", w);
-        ensure!(self.height == h, "image height changed to {}", h);
+        ensure!(
+            w == header.width && h == header.height,
+            "image resolution changed from {}x{} to {}x{}",
+            self.width,
+            self.height,
+            header.width,
+            header.height
+        );
 
-        let mut img = ImageBuf::alloc(w, h, None, ColorFormat::Bgra8888);
+        let mut img = ImageBuf::alloc(self.width, self.height, None, ColorFormat::Bgra8888);
 
         let image = turbojpeg::Image {
             pixels: img.data.as_mut_slice(),
