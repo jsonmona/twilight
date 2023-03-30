@@ -1,5 +1,5 @@
 use crate::image::{convert_color, ColorFormat, ImageBuf};
-use crate::util::DesktopUpdate;
+use crate::util::{CursorShape, DesktopUpdate};
 use crate::viewer::display_state::DisplayState;
 use bytemuck::{Pod, Zeroable};
 use std::sync::Mutex;
@@ -23,6 +23,7 @@ pub struct DesktopView {
     desktop_texture: Texture,
     cursor_texture: Texture,
     bind_group: BindGroup,
+    curr_cursor_shape: Option<CursorShape>,
 }
 
 impl DesktopView {
@@ -226,6 +227,7 @@ impl DesktopView {
             bind_group,
             render_pipeline,
             uniform_buffer,
+            curr_cursor_shape: None,
         }
     }
 
@@ -318,7 +320,11 @@ impl DesktopView {
                     if let Some(cursor_state) = update.cursor {
                         let uniform = Uniform {
                             visible: cursor_state.visible as u32,
-                            xor_cursor: false as u32,
+                            xor_cursor: self
+                                .curr_cursor_shape
+                                .as_ref()
+                                .map(|x| x.xor)
+                                .unwrap_or(false) as u32,
                             cursor_relative_size: [
                                 desktop_img.width as f32 / 128.,
                                 desktop_img.height as f32 / 128.,
@@ -370,6 +376,8 @@ impl DesktopView {
                                     depth_or_array_layers: 1,
                                 },
                             );
+
+                            self.curr_cursor_shape = Some(shape);
                         }
                     }
                 }

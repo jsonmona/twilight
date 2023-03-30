@@ -1,5 +1,5 @@
 use crate::util::{spawn_thread_asyncify, DesktopUpdate, PerformanceMonitor, Timer};
-use crate::video::capture::{CaptureStage, DxgiCaptureStage};
+use crate::video::capture::{CaptureStage, GdiCaptureStage};
 use crate::video::encoder::jpeg::JpegEncoder;
 use crate::video::encoder::EncoderStage;
 use anyhow::Result;
@@ -19,7 +19,7 @@ pub fn capture_pipeline() -> Result<CapturePipelineOutput> {
     let (encoded_tx, encoded_rx) = tokio::sync::mpsc::channel(1);
 
     let capture_stage = spawn_thread_asyncify(move || {
-        let mut capture = DxgiCaptureStage::new()?;
+        let mut capture = GdiCaptureStage::new()?;
 
         resolution_tx.send(capture.resolution())?;
         drop(resolution_tx);

@@ -1,7 +1,8 @@
 use crate::image::{ColorFormat, Image, ImageBuf};
-use crate::util::DesktopUpdate;
+use crate::util::{CursorShape, CursorState, DesktopUpdate};
 use crate::video::capture::CaptureStage;
 use anyhow::{ensure, Context, Result};
+use std::ffi::c_void;
 use std::mem::zeroed;
 use std::ptr::slice_from_raw_parts;
 use windows::core::Interface;
@@ -117,6 +118,9 @@ impl DxgiCaptureStage {
                 .expect("A successful CreateTexture2D call must return a valid texture");
         }
 
+        //TODO: Implement optimization using DesktopImageInSystemMemory. I'm yet to encounter
+        //      any system with that flag true. Please create a GitHub issue if you have one.
+
         Ok(DxgiCaptureStage {
             _adapter: adapter,
             _output: output,
@@ -189,49 +193,65 @@ impl CaptureStage for DxgiCaptureStage {
             let mut frame_info = zeroed();
             let mut desktop = None;
 
+            match self.output_duplication.ReleaseFrame() {
+                Ok(_) => {}
+                Err(e) => match e.code() {
+                    DXGI_ERROR_INVALID_CALL => {}
+                    _ => return Err(e.into()),
+                },
+            }
+
             match self
                 .output_duplication
-                .AcquireNextFrame(60000, &mut frame_info, &mut desktop)
+                .AcquireNextFrame(150, &mut frame_info, &mut desktop)
             {
                 Ok(_) => {
-                    let desktop = desktop.unwrap().cast()?;
-                    self.copy_desktop_tex(&desktop)?;
-                    self.output_duplication.ReleaseFrame()?;
+                    let mut cursor = None;
+                    if frame_info.LastMouseUpdateTime != 0 || self.curr_img.is_none() {
+                        let shape = if frame_info.PointerShapeBufferSize != 0 {
+                            let mut buf = vec![0u8; frame_info.PointerShapeBufferSize.try_into()?];
+                            let mut buf_size = 0;
+                            let mut shape_info = zeroed();
+                            self.output_duplication.GetFramePointerShape(
+                                frame_info.PointerShapeBufferSize,
+                                buf.as_mut_ptr() as *mut c_void,
+                                &mut buf_size,
+                                &mut shape_info,
+                            )?;
+                            Some(decode_cursor(&shape_info, &buf))
+                        } else {
+                            None
+                        };
+
+                        cursor = Some(CursorState {
+                            visible: frame_info.PointerPosition.Visible.as_bool(),
+                            pos_x: frame_info.PointerPosition.Position.x as u32,
+                            pos_y: frame_info.PointerPosition.Position.y as u32,
+                            shape,
+                        });
+                    }
+                    if frame_info.LastPresentTime != 0 || self.curr_img.is_none() {
+                        let desktop = desktop.unwrap().cast()?;
+                        self.copy_desktop_tex(&desktop)?;
+                    }
                     let curr_img = self
                         .curr_img
                         .as_ref()
                         .expect("Must be a valid image after copying into");
-                    let image = Image::new(
-                        curr_img.width,
-                        curr_img.height,
-                        curr_img.stride,
-                        curr_img.color_format,
-                        curr_img.data.as_slice(),
-                    );
                     Ok(DesktopUpdate {
-                        cursor: None,
-                        desktop: image,
+                        cursor,
+                        desktop: curr_img.as_data_ref(),
                     })
                 }
                 Err(e) => match e.code() {
                     DXGI_ERROR_WAIT_TIMEOUT => {
-                        let desktop = desktop.unwrap().cast()?;
-                        self.copy_desktop_tex(&desktop)?;
-                        self.output_duplication.ReleaseFrame()?;
                         let curr_img = self
                             .curr_img
                             .as_ref()
-                            .expect("Must be a valid image after copying into");
-                        let image = Image::new(
-                            curr_img.width,
-                            curr_img.height,
-                            curr_img.stride,
-                            curr_img.color_format,
-                            curr_img.data.as_slice(),
-                        );
+                            .expect("first invocation must not be timeout");
                         Ok(DesktopUpdate {
                             cursor: None,
-                            desktop: image,
+                            desktop: curr_img.as_data_ref(),
                         })
                     }
                     _ => Err(e.into()),
@@ -300,4 +320,84 @@ unsafe fn list_outputs(adapter: &IDXGIAdapter1) -> Result<Vec<IDXGIOutput>> {
     }
 
     Ok(output)
+}
+
+fn decode_cursor(shape_info: &DXGI_OUTDUPL_POINTER_SHAPE_INFO, buf: &[u8]) -> CursorShape {
+    let mut output = CursorShape {
+        image: ImageBuf::alloc(
+            shape_info.Width,
+            shape_info.Height,
+            None,
+            ColorFormat::Bgra8888,
+        ),
+        xor: false,
+        hotspot_x: shape_info.HotSpot.x as f32,
+        hotspot_y: shape_info.HotSpot.y as f32,
+    };
+
+    match DXGI_OUTDUPL_POINTER_SHAPE_TYPE(shape_info.Type as i32) {
+        DXGI_OUTDUPL_POINTER_SHAPE_TYPE_MONOCHROME => {
+            output.xor = true;
+        }
+        DXGI_OUTDUPL_POINTER_SHAPE_TYPE_COLOR => {
+            copy_color_data(&mut output.image, shape_info, buf);
+        }
+        DXGI_OUTDUPL_POINTER_SHAPE_TYPE_MASKED_COLOR => {
+            output.xor = true;
+            copy_color_data(&mut output.image, shape_info, buf);
+
+            // flip alpha
+            //TODO: Use SIMD or at least u32
+            let max_index: usize = (output.image.height * output.image.stride)
+                .try_into()
+                .expect("unable to cast u32 into usize");
+            assert!(max_index <= output.image.data.len());
+            assert!(output.image.width * 4 <= output.image.stride);
+            for i in 0..output.image.height {
+                for j in 0..output.image.width {
+                    let pos: usize = (i * output.image.stride + j * 4 + 3)
+                        .try_into()
+                        .expect("unable to cast u32 into usize");
+                    unsafe {
+                        let alpha = output.image.data.get_unchecked_mut(pos);
+                        *alpha = 0xFF - *alpha;
+                    }
+                }
+            }
+        }
+        _ => {
+            eprintln!("Unknown cursor shape type: {shape_info:?}");
+            // use blank image
+        }
+    }
+
+    output
+}
+
+fn copy_color_data(dst: &mut ImageBuf, shape_info: &DXGI_OUTDUPL_POINTER_SHAPE_INFO, buf: &[u8]) {
+    if shape_info.Pitch == shape_info.Width * 4 {
+        // fast path
+        let total_len = (shape_info.Height * shape_info.Width * 4)
+            .try_into()
+            .expect("failed to cast u32 into usize");
+        assert_eq!(dst.data.len(), total_len);
+        dst.data.copy_from_slice(&buf[..total_len]);
+    } else {
+        // copy line by line
+        let line_len: usize = (shape_info.Width * 4)
+            .try_into()
+            .expect("failed to cast u32 into usize");
+        let src_pitch: usize = shape_info
+            .Pitch
+            .try_into()
+            .expect("failed to cast u32 into usize");
+        let mut src_offset = 0;
+        let mut dst_offset = 0;
+        for _ in 0..shape_info.Height {
+            dst.data[dst_offset..dst_offset + line_len]
+                .copy_from_slice(&buf[src_offset..src_offset + line_len]);
+            src_offset += src_pitch;
+            dst_offset += line_len;
+        }
+    }
 }

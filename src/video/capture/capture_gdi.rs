@@ -129,14 +129,16 @@ impl CaptureStage for GdiCaptureStage {
                     let mut iconinfo = zeroed();
                     let ret = GetIconInfo(cursor_info.hCursor, &mut iconinfo);
                     if ret.as_bool() {
-                        let cursor = get_cursor_color(&iconinfo)
-                            .or_else(|| get_cursor_monochrome(&iconinfo));
+                        let mut xor = false;
+                        let cursor = get_cursor_color(&iconinfo, &mut xor)
+                            .or_else(|| get_cursor_monochrome(&iconinfo, &mut xor));
 
                         DeleteObject(iconinfo.hbmMask);
                         DeleteObject(iconinfo.hbmColor);
 
                         cursor.map(|image| CursorShape {
                             image,
+                            xor,
                             hotspot_x: 0.0,
                             hotspot_y: 0.0,
                         })
@@ -218,7 +220,7 @@ unsafe fn get_bitmap_data(hbmp: HBITMAP) -> Option<(BITMAP, Vec<u8>)> {
     }
 }
 
-unsafe fn get_cursor_color(iconinfo: &ICONINFO) -> Option<ImageBuf> {
+unsafe fn get_cursor_color(iconinfo: &ICONINFO, xor: &mut bool) -> Option<ImageBuf> {
     let (bmp_color, mut color) = get_bitmap_data(iconinfo.hbmColor)?;
 
     if bmp_color.bmBitsPixel < 32 {
@@ -227,8 +229,10 @@ unsafe fn get_cursor_color(iconinfo: &ICONINFO) -> Option<ImageBuf> {
 
     if let Some((bmp_mask, mask)) = get_bitmap_data(iconinfo.hbmMask) {
         let bitmap_has_alpha = color.iter().skip(3).step_by(4).any(|&alpha| alpha != 0);
+        //TODO: Find a way to detect masked color icons (DXGI_OUTDUPL_POINTER_SHAPE_TYPE_MASKED_COLOR)
 
         if !bitmap_has_alpha {
+            *xor = true;
             let mut mask_values = mask.iter().copied();
 
             for y in 0..bmp_mask.bmHeight as usize {
@@ -260,7 +264,9 @@ unsafe fn get_cursor_color(iconinfo: &ICONINFO) -> Option<ImageBuf> {
     ))
 }
 
-unsafe fn get_cursor_monochrome(iconinfo: &ICONINFO) -> Option<ImageBuf> {
+unsafe fn get_cursor_monochrome(iconinfo: &ICONINFO, xor: &mut bool) -> Option<ImageBuf> {
+    *xor = true;
+
     let (bmp, mask) = get_bitmap_data(iconinfo.hbmMask)?;
 
     let height = bmp.bmHeight.unsigned_abs() / 2;

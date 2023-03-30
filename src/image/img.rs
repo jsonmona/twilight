@@ -96,6 +96,16 @@ impl<D: Deref<Target = [u8]>> Image<D> {
         }
     }
 
+    pub fn as_data_ref(&self) -> Image<&[u8]> {
+        Image {
+            width: self.width,
+            height: self.height,
+            stride: self.stride,
+            color_format: self.color_format,
+            data: self.data.as_ref(),
+        }
+    }
+
     #[must_use]
     pub fn copied(&self) -> ImageBuf {
         ImageBuf {

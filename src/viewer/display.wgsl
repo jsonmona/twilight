@@ -44,13 +44,20 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    let desktop = textureSample(t_desktop, s_desktop, in.desktop_uv);
-    let cursor = textureSample(t_cursor, s_cursor, in.cursor_uv);
-
     // Spec says step() accepts vector, but it doesn't
     let x_guard = step(0., in.cursor_uv.x) - step(1., in.cursor_uv.x);
     let y_guard = step(0., in.cursor_uv.y) - step(1., in.cursor_uv.y);
-    let cursor_alpha = x_guard * y_guard * cursor.a;
+    let cursor_mask = vec4<f32>(x_guard * y_guard);
 
-    return desktop * (1. - cursor_alpha) + cursor * cursor_alpha;
+    let desktop = textureSample(t_desktop, s_desktop, in.desktop_uv);
+    let cursor = textureSample(t_cursor, s_cursor, in.cursor_uv) * cursor_mask;
+
+    if (info.xor_cursor == u32(0)) {
+        return desktop * (1. - cursor.a) + cursor * cursor.a;
+    } else {
+        let desktop_int = vec4<u32>(desktop * 255.5);
+        let cursor_int = vec4<u32>(cursor * 255.5);
+        let xor_pixel = vec4<f32>(desktop_int ^ cursor_int) / 255.;
+        return xor_pixel * (1. - cursor.a) + cursor * cursor.a;
+    }
 }

@@ -423,7 +423,7 @@ async fn websocket_io(
                             &CursorShapeArgs {
                                 image,
                                 codec: VideoCodec::Bgra8888,
-                                xor: false,
+                                xor: cursor_shape.xor,
                                 hotspot: Some(&Coord2f::new(0.0, 0.0)),
                                 resolution: Some(&Size2u::new(
                                     cursor_shape.image.width,

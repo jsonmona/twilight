@@ -185,6 +185,7 @@ async fn worker<Conn: ServerConnection>(
                                 ColorFormat::Bgra8888,
                                 img.iter().collect(),
                             ),
+                            xor: s.xor(),
                             hotspot_x: hotspot.x(),
                             hotspot_y: hotspot.y(),
                         })
