@@ -17,7 +17,7 @@ use hyper::{header, Body, Method, Request, Response, StatusCode};
 use hyper_tungstenite::tungstenite::Message;
 use hyper_tungstenite::HyperWebsocket;
 use lazy_static::lazy_static;
-use log::{debug, error};
+use log::{debug, error, info};
 use rand::prelude::*;
 use regex::Regex;
 use rustc_hash::FxHashMap;
@@ -332,9 +332,33 @@ async fn handle_stream(mut req: Request<Body>, server: Rc<TwilightServer>) -> Re
     let (w, h, pipeline) = capture_pipeline().unwrap();
 
     tokio::task::spawn_local(async move {
-        websocket_io(websocket, server, (w, h), pipeline)
-            .await
-            .unwrap();
+        let result = websocket_io(websocket, server, (w, h), pipeline).await;
+
+        // log error if necessary
+        if let Err(e) = result {
+            match e.downcast::<tungstenite::Error>() {
+                Ok(e) => {
+                    // tungstenite error
+                    match e {
+                        tungstenite::Error::ConnectionClosed => {
+                            info!("WebSocket closed");
+                        }
+                        tungstenite::Error::Io(e) => {
+                            // Probably not our fault; Use short form
+                            info!("WebSocket io error: {}", e);
+                        }
+                        _ => {
+                            // Maybe our fault
+                            error!("WebSocket io error: {:?}", e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    // non-tungstenite error
+                    error!("WebSocket io error: {:?}", e);
+                }
+            }
+        }
     });
 
     response

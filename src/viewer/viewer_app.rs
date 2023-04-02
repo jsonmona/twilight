@@ -2,6 +2,7 @@ use crate::client::TwilightClientEvent;
 use crate::util::NonSend;
 use crate::viewer::desktop_view::DesktopView;
 use crate::viewer::display_state::DisplayState;
+use anyhow::Result;
 use cfg_if::cfg_if;
 use log::{error, info};
 use std::time::{Duration, Instant};
@@ -11,9 +12,9 @@ use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop, EventLoopBuilder, EventLoopProxy};
 use winit::window::WindowBuilder;
 
-#[derive(Debug)]
 pub struct ViewerApp {
     event_loop: EventLoop<TwilightClientEvent>,
+    on_exit: Option<Box<dyn FnOnce() -> Result<()>>>,
     _rt: Handle,
     _guard: NonSend,
 }
@@ -23,9 +24,14 @@ impl ViewerApp {
     pub fn new(rt: Handle) -> Self {
         ViewerApp {
             event_loop: EventLoopBuilder::<TwilightClientEvent>::with_user_event().build(),
+            on_exit: None,
             _rt: rt,
             _guard: Default::default(),
         }
+    }
+
+    pub fn set_on_exit(&mut self, callback: Box<dyn FnOnce() -> Result<()>>) {
+        self.on_exit = Some(callback);
     }
 
     pub fn create_proxy(&self) -> EventLoopProxy<TwilightClientEvent> {
@@ -33,7 +39,7 @@ impl ViewerApp {
     }
 
     /// On native platform, use pollster to drive this function
-    pub async fn launch(self) -> ! {
+    pub async fn launch(mut self) -> ! {
         let window = WindowBuilder::new().build(&self.event_loop).unwrap();
 
         let mut display_state;
@@ -79,6 +85,7 @@ impl ViewerApp {
                             .update(update);
                     }
                     TwilightClientEvent::Closed(r) => {
+                        //FIXME: Anything better to do than unwrap?
                         r.unwrap();
                         *control_flow = ControlFlow::Exit;
                     }
@@ -138,7 +145,13 @@ impl ViewerApp {
                         _ => {}
                     }
                 }
-                Event::LoopDestroyed => {}
+                Event::LoopDestroyed => {
+                    if let Some(f) = self.on_exit.take() {
+                        if let Err(e) = f() {
+                            error!("on_exit callback returned an error:\n{e:?}");
+                        }
+                    }
+                }
                 _ => {}
             })
     }

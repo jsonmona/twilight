@@ -86,7 +86,10 @@ pub fn capture_pipeline() -> Result<CapturePipelineOutput> {
                 update.and_then_desktop(|x| encoder.encode(x.as_data_ref()))?
             };
 
-            encoded_tx.blocking_send(update)?;
+            if encoded_tx.blocking_send(update).is_err() {
+                // channel closed is a normal exit
+                break;
+            }
         }
 
         anyhow::Ok(())

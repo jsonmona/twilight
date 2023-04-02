@@ -49,6 +49,10 @@ impl TwilightClient {
             worker,
         }
     }
+
+    pub fn close(&self) {
+        self.shutdown.send_replace(true);
+    }
 }
 
 fn decoder_pipeline(
