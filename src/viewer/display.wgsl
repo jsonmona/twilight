@@ -4,31 +4,14 @@ struct VertexInput {
 
 struct VertexOutput {
     @builtin(position) clip_pos: vec4<f32>,
-    @location(0) desktop_uv: vec2<f32>,
-    @location(1) cursor_uv: vec2<f32>,
-};
-
-struct UniformBuffer {
-    visible: u32,
-    xor_cursor: u32,
-    cursor_relative_size: vec2<f32>,
-    cursor_pos: vec2<f32>,
+    @location(0) uv: vec2<f32>,
 };
 
 @group(0) @binding(0)
-var t_desktop: texture_2d<f32>;
+var t_main: texture_2d<f32>;
 
 @group(0) @binding(1)
-var s_desktop: sampler;
-
-@group(0) @binding(2)
-var t_cursor: texture_2d<f32>;
-
-@group(0) @binding(3)
-var s_cursor: sampler;
-
-@group(0) @binding(4)
-var<uniform> info: UniformBuffer;
+var s_main: sampler;
 
 @vertex
 fn vs_main(in: VertexInput) -> VertexOutput {
@@ -37,27 +20,11 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     let v = f32((in.vertex_idx << 1u) & 2u);
     let xy = vec2<f32>(u, v) * vec2<f32>(2.0, -2.0) + vec2<f32>(-1.0, 1.0);
     out.clip_pos = vec4<f32>(xy, 0., 1.);
-    out.desktop_uv = vec2<f32>(u, v);
-    out.cursor_uv = (out.desktop_uv - info.cursor_pos) * info.cursor_relative_size;
+    out.uv = vec2<f32>(u, v);
     return out;
 }
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    // Spec says step() accepts vector, but it doesn't
-    let x_guard = step(0., in.cursor_uv.x) - step(1., in.cursor_uv.x);
-    let y_guard = step(0., in.cursor_uv.y) - step(1., in.cursor_uv.y);
-    let cursor_mask = vec4<f32>(x_guard * y_guard);
-
-    let desktop = textureSample(t_desktop, s_desktop, in.desktop_uv);
-    let cursor = textureSample(t_cursor, s_cursor, in.cursor_uv) * cursor_mask;
-
-    if (info.xor_cursor == u32(0)) {
-        return desktop * (1. - cursor.a) + cursor * cursor.a;
-    } else {
-        let desktop_int = vec4<u32>(desktop * 255.5);
-        let cursor_int = vec4<u32>(cursor * 255.5);
-        let xor_pixel = vec4<f32>(desktop_int ^ cursor_int) / 255.;
-        return xor_pixel * (1. - cursor.a) + cursor * cursor.a;
-    }
+    return textureSample(t_main, s_main, in.uv);
 }

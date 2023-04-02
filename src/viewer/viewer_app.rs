@@ -68,18 +68,15 @@ impl ViewerApp {
                 Event::UserEvent(kind) => match kind {
                     TwilightClientEvent::Connected { width, height } => {
                         info!("Connected to {width}x{height}");
+                        let state = display_state.as_mut().unwrap();
+                        desktop_view = Some(DesktopView::new(state, width, height));
                     }
                     TwilightClientEvent::NextFrame(update) => {
                         window.request_redraw();
-                        let state = display_state.as_mut().unwrap();
-                        match desktop_view.as_mut() {
-                            Some(view) => {
-                                view.update(update);
-                            }
-                            None => {
-                                desktop_view = Some(DesktopView::new(state, update));
-                            }
-                        }
+                        desktop_view
+                            .as_mut()
+                            .expect("resolution not set before render")
+                            .update(update);
                     }
                     TwilightClientEvent::Closed(r) => {
                         r.unwrap();
