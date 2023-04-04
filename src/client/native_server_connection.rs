@@ -24,8 +24,8 @@ pub struct NativeServerConnection {
 }
 
 impl NativeServerConnection {
-    pub async fn new(ip: IpAddr, port: u16) -> Result<Self> {
-        let stream = TcpStream::connect((ip, port)).await?;
+    pub async fn new(host: &str, port: u16) -> Result<Self> {
+        let stream = TcpStream::connect((host, port)).await?;
 
         let (send, conn) = hyper::client::conn::Builder::new()
             .handshake(stream)

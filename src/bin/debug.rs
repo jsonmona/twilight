@@ -19,7 +19,7 @@ fn main() {
 
     twilight::viewer::launch(
         rt,
-        "127.0.0.1".parse().expect("valid localhost address"),
+        "127.0.0.1",
         6497,
     );
 }

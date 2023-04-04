@@ -7,7 +7,8 @@ use tokio::runtime::Handle;
 use tokio::sync::oneshot;
 use tokio::task::LocalSet;
 
-pub fn launch(rt: Handle, ip: IpAddr, port: u16) -> ! {
+pub fn launch(rt: Handle, host: impl Into<String>, port: u16) -> ! {
+    let host = host.into();
     let mut viewer_app = ViewerApp::new(rt.clone());
     let proxy = viewer_app.create_proxy();
     let (quit_tx, quit_rx) = oneshot::channel();
@@ -25,7 +26,7 @@ pub fn launch(rt: Handle, ip: IpAddr, port: u16) -> ! {
         rt.block_on(async move {
             let _guard = local.enter();
             let client = TwilightClient::new(Rc::new(callback), async move {
-                NativeServerConnection::new(ip, port).await
+                NativeServerConnection::new(&host, port).await
             });
 
             tokio::select! {
