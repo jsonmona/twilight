@@ -1,5 +1,6 @@
 use tokio::runtime::Runtime;
 use tokio::task::LocalSet;
+use twilight::client::ClientLaunchArgs;
 
 fn main() {
     twilight::platform::win32::init_dpi();
@@ -19,7 +20,10 @@ fn main() {
 
     twilight::viewer::launch(
         rt,
-        "127.0.0.1",
-        6497,
+        ClientLaunchArgs {
+            host: "127.0.0.1".into(),
+            port: None,
+            cleartext: false,
+        },
     );
 }

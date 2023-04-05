@@ -1,4 +1,6 @@
+use crate::client::native_server_connection::NativeServerConnection;
 use crate::client::server_connection::{FetchResponse, MessageStream, ServerConnection};
+use crate::client::ClientLaunchArgs;
 use crate::image::{ColorFormat, ImageBuf};
 use crate::network::util::parse_msg;
 use crate::schema::video::{Coord2f, Coord2u, NotifyVideoStart, VideoCodec, VideoFrame};
@@ -9,7 +11,6 @@ use crate::video::decoder::DecoderStage;
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use hyper::body::Bytes;
 use hyper::Method;
-use std::future::Future;
 use std::rc::Rc;
 use tokio::sync::{mpsc, watch};
 use tokio::task::JoinHandle;
@@ -23,21 +24,25 @@ pub enum TwilightClientEvent {
 
 type EventCb = Rc<dyn Fn(TwilightClientEvent)>;
 
+/// Represents connection to a single server.
 pub struct TwilightClient {
     shutdown: watch::Sender<bool>,
     worker: JoinHandle<()>,
 }
 
 impl TwilightClient {
-    pub fn new<Conn, ConnFut>(callback: EventCb, conn: ConnFut) -> Self
-    where
-        Conn: ServerConnection,
-        ConnFut: Future<Output = Result<Conn>> + Send + 'static,
-    {
+    pub fn new(callback: EventCb, args: ClientLaunchArgs) -> Self {
         let (tx, rx) = watch::channel(false);
 
+        if !args.cleartext {
+            panic!("Only cleartext transport is supported for now");
+        }
+
+        let host = args.host.clone();
+        let port = args.port();
+
         let worker = tokio::task::spawn_local(async move {
-            let result = match conn.await {
+            let result = match NativeServerConnection::new(&host, port).await {
                 Ok(c) => worker(c, rx, Rc::clone(&callback)).await,
                 Err(e) => Err(e),
             };

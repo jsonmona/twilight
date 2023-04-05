@@ -11,7 +11,6 @@ use hyper::header::{CONNECTION, HOST, UPGRADE};
 use hyper::upgrade::Upgraded;
 use hyper::{Body, Method, Request, StatusCode};
 use log::error;
-use std::net::IpAddr;
 use tokio::net::TcpStream;
 use tokio::task::JoinHandle;
 use tokio_tungstenite::WebSocketStream;

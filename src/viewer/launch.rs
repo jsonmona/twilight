@@ -1,14 +1,12 @@
-use crate::client::native_server_connection::NativeServerConnection;
-use crate::client::TwilightClient;
+use crate::client::{ClientLaunchArgs, TwilightClient};
 use crate::viewer::viewer_app::ViewerApp;
-use std::net::IpAddr;
+
 use std::rc::Rc;
 use tokio::runtime::Handle;
 use tokio::sync::oneshot;
 use tokio::task::LocalSet;
 
-pub fn launch(rt: Handle, host: impl Into<String>, port: u16) -> ! {
-    let host = host.into();
+pub fn launch(rt: Handle, args: ClientLaunchArgs) -> ! {
     let mut viewer_app = ViewerApp::new(rt.clone());
     let proxy = viewer_app.create_proxy();
     let (quit_tx, quit_rx) = oneshot::channel();
@@ -25,9 +23,7 @@ pub fn launch(rt: Handle, host: impl Into<String>, port: u16) -> ! {
 
         rt.block_on(async move {
             let _guard = local.enter();
-            let client = TwilightClient::new(Rc::new(callback), async move {
-                NativeServerConnection::new(&host, port).await
-            });
+            let client = TwilightClient::new(Rc::new(callback), args);
 
             tokio::select! {
                 biased;
