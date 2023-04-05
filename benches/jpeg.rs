@@ -21,14 +21,10 @@ fn criterion_benchmark(c: &mut Criterion) {
     let mut encoder = JpegEncoder::new(width, height, true).unwrap();
     let mut decoder = JpegDecoder::new(width, height).unwrap();
     let img = make_image(width, height);
-    let encoded = encoder.encode(img.copied()).unwrap();
+    let encoded = encoder.encode(img.as_data_ref()).unwrap();
 
     c.bench_function("jpeg_encode", |b| {
-        b.iter_batched(
-            || img.copied(),
-            |x| encoder.encode(x).unwrap(),
-            BatchSize::LargeInput,
-        )
+        b.iter_with_large_drop(|| encoder.encode(img.as_data_ref()))
     });
 
     c.bench_function("jpeg_decode", |b| {
