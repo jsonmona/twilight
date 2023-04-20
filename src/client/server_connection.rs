@@ -25,7 +25,10 @@ pub trait ServerConnection: Send {
     ) -> Result<Self::FetchResponseImpl>;
 
     /// Upgrade into websocket API.
-    async fn upgrade(self) -> Result<(Self::MessageSinkImpl, Self::MessageStreamImpl)>;
+    async fn upgrade(
+        self,
+        version: i32,
+    ) -> Result<(Self::MessageSinkImpl, Self::MessageStreamImpl)>;
 }
 
 #[async_trait]

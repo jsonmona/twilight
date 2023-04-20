@@ -64,11 +64,16 @@ Endpoints described here needs the authentication cookie 🍪,
 or they will return 403 Forbidden.
 
 ---
-`GET /stream`
+`GET /stream?version=1`
 Start WebSocket connection.
 
 It upgrades the underlying connection into the WebSocket connection.
+May return error if version is unsupported.
 
 
-### Flatbuffer protocol
-WIP
+### WebSocket endpoint v1
+(WIP)
+
+Every message is `[u16le: stream id][bytes: flatbuffer data]` concatenated.
+Stream ID 0 is control (`ControlFrame`).
+Other channels are dynamically allocated.

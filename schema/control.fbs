@@ -1,0 +1,15 @@
+include "audio.fbs";
+include "video.fbs";
+
+namespace control;
+
+union ControlPacket {
+  video.NotifyVideoStart,
+  video.NotifyVideoStop,
+  audio.NotifyAudioStart,
+  audio.NotifyAudioStop,
+}
+
+table ControlFrame {
+  data:ControlPacket;
+}

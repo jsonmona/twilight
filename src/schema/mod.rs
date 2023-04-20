@@ -1,5 +1,5 @@
 #[rustfmt::skip]
 #[allow(warnings, unused)]
-mod video_generated;
+mod schema_generated;
 
-pub use video_generated::*;
+pub use schema_generated::*;

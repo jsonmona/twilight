@@ -1,7 +1,7 @@
 namespace video;
 
 enum VideoCodec : byte {
-  Empty = 0,
+  Null = 0,
   Bgra8888,
   Rgb24,
   Jpeg,
@@ -23,8 +23,13 @@ struct Coord2f {
 }
 
 table NotifyVideoStart {
+  stream:uint16;
   resolution:Size2u;
   desktop_codec:VideoCodec;
+}
+
+table NotifyVideoStop {
+  stream:uint16;
 }
 
 table VideoFrame {

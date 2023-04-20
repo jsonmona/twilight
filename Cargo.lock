@@ -2312,6 +2312,7 @@ dependencies = [
  "ultraviolet",
  "url",
  "wgpu",
+ "wide",
  "windows",
  "winit",
 ]

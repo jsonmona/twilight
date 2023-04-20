@@ -10,6 +10,444 @@ extern crate flatbuffers;
 use self::flatbuffers::{EndianScalar, Follow};
 
 #[allow(unused_imports, dead_code)]
+pub mod audio {
+
+  use core::mem;
+  use core::cmp::Ordering;
+
+  extern crate flatbuffers;
+  use self::flatbuffers::{EndianScalar, Follow};
+
+#[deprecated(since = "2.0.0", note = "Use associated constants instead. This will no longer be generated in 2021.")]
+pub const ENUM_MIN_AUDIO_CODEC: i8 = 0;
+#[deprecated(since = "2.0.0", note = "Use associated constants instead. This will no longer be generated in 2021.")]
+pub const ENUM_MAX_AUDIO_CODEC: i8 = 1;
+#[deprecated(since = "2.0.0", note = "Use associated constants instead. This will no longer be generated in 2021.")]
+#[allow(non_camel_case_types)]
+pub const ENUM_VALUES_AUDIO_CODEC: [AudioCodec; 2] = [
+  AudioCodec::Null,
+  AudioCodec::PcmF32le,
+];
+
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+#[repr(transparent)]
+pub struct AudioCodec(pub i8);
+#[allow(non_upper_case_globals)]
+impl AudioCodec {
+  pub const Null: Self = Self(0);
+  pub const PcmF32le: Self = Self(1);
+
+  pub const ENUM_MIN: i8 = 0;
+  pub const ENUM_MAX: i8 = 1;
+  pub const ENUM_VALUES: &'static [Self] = &[
+    Self::Null,
+    Self::PcmF32le,
+  ];
+  /// Returns the variant's name or "" if unknown.
+  pub fn variant_name(self) -> Option<&'static str> {
+    match self {
+      Self::Null => Some("Null"),
+      Self::PcmF32le => Some("PcmF32le"),
+      _ => None,
+    }
+  }
+}
+impl core::fmt::Debug for AudioCodec {
+  fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+    if let Some(name) = self.variant_name() {
+      f.write_str(name)
+    } else {
+      f.write_fmt(format_args!("<UNKNOWN {:?}>", self.0))
+    }
+  }
+}
+impl<'a> flatbuffers::Follow<'a> for AudioCodec {
+  type Inner = Self;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    let b = flatbuffers::read_scalar_at::<i8>(buf, loc);
+    Self(b)
+  }
+}
+
+impl flatbuffers::Push for AudioCodec {
+    type Output = AudioCodec;
+    #[inline]
+    unsafe fn push(&self, dst: &mut [u8], _written_len: usize) {
+        flatbuffers::emplace_scalar::<i8>(dst, self.0);
+    }
+}
+
+impl flatbuffers::EndianScalar for AudioCodec {
+  type Scalar = i8;
+  #[inline]
+  fn to_little_endian(self) -> i8 {
+    self.0.to_le()
+  }
+  #[inline]
+  #[allow(clippy::wrong_self_convention)]
+  fn from_little_endian(v: i8) -> Self {
+    let b = i8::from_le(v);
+    Self(b)
+  }
+}
+
+impl<'a> flatbuffers::Verifiable for AudioCodec {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    i8::run_verifier(v, pos)
+  }
+}
+
+impl flatbuffers::SimpleToVerifyInSlice for AudioCodec {}
+pub enum NotifyAudioStartOffset {}
+#[derive(Copy, Clone, PartialEq)]
+
+pub struct NotifyAudioStart<'a> {
+  pub _tab: flatbuffers::Table<'a>,
+}
+
+impl<'a> flatbuffers::Follow<'a> for NotifyAudioStart<'a> {
+  type Inner = NotifyAudioStart<'a>;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    Self { _tab: flatbuffers::Table::new(buf, loc) }
+  }
+}
+
+impl<'a> NotifyAudioStart<'a> {
+  pub const VT_STREAM: flatbuffers::VOffsetT = 4;
+  pub const VT_SAMPLING_RATE: flatbuffers::VOffsetT = 6;
+  pub const VT_CHANNELS: flatbuffers::VOffsetT = 8;
+  pub const VT_CODEC: flatbuffers::VOffsetT = 10;
+
+  #[inline]
+  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+    NotifyAudioStart { _tab: table }
+  }
+  #[allow(unused_mut)]
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+    args: &'args NotifyAudioStartArgs
+  ) -> flatbuffers::WIPOffset<NotifyAudioStart<'bldr>> {
+    let mut builder = NotifyAudioStartBuilder::new(_fbb);
+    builder.add_channels(args.channels);
+    builder.add_sampling_rate(args.sampling_rate);
+    builder.add_stream(args.stream);
+    builder.add_codec(args.codec);
+    builder.finish()
+  }
+
+
+  #[inline]
+  pub fn stream(&self) -> u16 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u16>(NotifyAudioStart::VT_STREAM, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn sampling_rate(&self) -> u32 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u32>(NotifyAudioStart::VT_SAMPLING_RATE, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn channels(&self) -> u32 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u32>(NotifyAudioStart::VT_CHANNELS, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn codec(&self) -> AudioCodec {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<AudioCodec>(NotifyAudioStart::VT_CODEC, Some(AudioCodec::Null)).unwrap()}
+  }
+}
+
+impl flatbuffers::Verifiable for NotifyAudioStart<'_> {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.visit_table(pos)?
+     .visit_field::<u16>("stream", Self::VT_STREAM, false)?
+     .visit_field::<u32>("sampling_rate", Self::VT_SAMPLING_RATE, false)?
+     .visit_field::<u32>("channels", Self::VT_CHANNELS, false)?
+     .visit_field::<AudioCodec>("codec", Self::VT_CODEC, false)?
+     .finish();
+    Ok(())
+  }
+}
+pub struct NotifyAudioStartArgs {
+    pub stream: u16,
+    pub sampling_rate: u32,
+    pub channels: u32,
+    pub codec: AudioCodec,
+}
+impl<'a> Default for NotifyAudioStartArgs {
+  #[inline]
+  fn default() -> Self {
+    NotifyAudioStartArgs {
+      stream: 0,
+      sampling_rate: 0,
+      channels: 0,
+      codec: AudioCodec::Null,
+    }
+  }
+}
+
+pub struct NotifyAudioStartBuilder<'a: 'b, 'b> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+}
+impl<'a: 'b, 'b> NotifyAudioStartBuilder<'a, 'b> {
+  #[inline]
+  pub fn add_stream(&mut self, stream: u16) {
+    self.fbb_.push_slot::<u16>(NotifyAudioStart::VT_STREAM, stream, 0);
+  }
+  #[inline]
+  pub fn add_sampling_rate(&mut self, sampling_rate: u32) {
+    self.fbb_.push_slot::<u32>(NotifyAudioStart::VT_SAMPLING_RATE, sampling_rate, 0);
+  }
+  #[inline]
+  pub fn add_channels(&mut self, channels: u32) {
+    self.fbb_.push_slot::<u32>(NotifyAudioStart::VT_CHANNELS, channels, 0);
+  }
+  #[inline]
+  pub fn add_codec(&mut self, codec: AudioCodec) {
+    self.fbb_.push_slot::<AudioCodec>(NotifyAudioStart::VT_CODEC, codec, AudioCodec::Null);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> NotifyAudioStartBuilder<'a, 'b> {
+    let start = _fbb.start_table();
+    NotifyAudioStartBuilder {
+      fbb_: _fbb,
+      start_: start,
+    }
+  }
+  #[inline]
+  pub fn finish(self) -> flatbuffers::WIPOffset<NotifyAudioStart<'a>> {
+    let o = self.fbb_.end_table(self.start_);
+    flatbuffers::WIPOffset::new(o.value())
+  }
+}
+
+impl core::fmt::Debug for NotifyAudioStart<'_> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    let mut ds = f.debug_struct("NotifyAudioStart");
+      ds.field("stream", &self.stream());
+      ds.field("sampling_rate", &self.sampling_rate());
+      ds.field("channels", &self.channels());
+      ds.field("codec", &self.codec());
+      ds.finish()
+  }
+}
+pub enum NotifyAudioStopOffset {}
+#[derive(Copy, Clone, PartialEq)]
+
+pub struct NotifyAudioStop<'a> {
+  pub _tab: flatbuffers::Table<'a>,
+}
+
+impl<'a> flatbuffers::Follow<'a> for NotifyAudioStop<'a> {
+  type Inner = NotifyAudioStop<'a>;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    Self { _tab: flatbuffers::Table::new(buf, loc) }
+  }
+}
+
+impl<'a> NotifyAudioStop<'a> {
+  pub const VT_STREAM: flatbuffers::VOffsetT = 4;
+
+  #[inline]
+  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+    NotifyAudioStop { _tab: table }
+  }
+  #[allow(unused_mut)]
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+    args: &'args NotifyAudioStopArgs
+  ) -> flatbuffers::WIPOffset<NotifyAudioStop<'bldr>> {
+    let mut builder = NotifyAudioStopBuilder::new(_fbb);
+    builder.add_stream(args.stream);
+    builder.finish()
+  }
+
+
+  #[inline]
+  pub fn stream(&self) -> u16 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u16>(NotifyAudioStop::VT_STREAM, Some(0)).unwrap()}
+  }
+}
+
+impl flatbuffers::Verifiable for NotifyAudioStop<'_> {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.visit_table(pos)?
+     .visit_field::<u16>("stream", Self::VT_STREAM, false)?
+     .finish();
+    Ok(())
+  }
+}
+pub struct NotifyAudioStopArgs {
+    pub stream: u16,
+}
+impl<'a> Default for NotifyAudioStopArgs {
+  #[inline]
+  fn default() -> Self {
+    NotifyAudioStopArgs {
+      stream: 0,
+    }
+  }
+}
+
+pub struct NotifyAudioStopBuilder<'a: 'b, 'b> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+}
+impl<'a: 'b, 'b> NotifyAudioStopBuilder<'a, 'b> {
+  #[inline]
+  pub fn add_stream(&mut self, stream: u16) {
+    self.fbb_.push_slot::<u16>(NotifyAudioStop::VT_STREAM, stream, 0);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> NotifyAudioStopBuilder<'a, 'b> {
+    let start = _fbb.start_table();
+    NotifyAudioStopBuilder {
+      fbb_: _fbb,
+      start_: start,
+    }
+  }
+  #[inline]
+  pub fn finish(self) -> flatbuffers::WIPOffset<NotifyAudioStop<'a>> {
+    let o = self.fbb_.end_table(self.start_);
+    flatbuffers::WIPOffset::new(o.value())
+  }
+}
+
+impl core::fmt::Debug for NotifyAudioStop<'_> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    let mut ds = f.debug_struct("NotifyAudioStop");
+      ds.field("stream", &self.stream());
+      ds.finish()
+  }
+}
+pub enum AudioFrameOffset {}
+#[derive(Copy, Clone, PartialEq)]
+
+pub struct AudioFrame<'a> {
+  pub _tab: flatbuffers::Table<'a>,
+}
+
+impl<'a> flatbuffers::Follow<'a> for AudioFrame<'a> {
+  type Inner = AudioFrame<'a>;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    Self { _tab: flatbuffers::Table::new(buf, loc) }
+  }
+}
+
+impl<'a> AudioFrame<'a> {
+  pub const VT_AUDIO_BYTES: flatbuffers::VOffsetT = 4;
+
+  #[inline]
+  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+    AudioFrame { _tab: table }
+  }
+  #[allow(unused_mut)]
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+    args: &'args AudioFrameArgs
+  ) -> flatbuffers::WIPOffset<AudioFrame<'bldr>> {
+    let mut builder = AudioFrameBuilder::new(_fbb);
+    builder.add_audio_bytes(args.audio_bytes);
+    builder.finish()
+  }
+
+
+  #[inline]
+  pub fn audio_bytes(&self) -> u64 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u64>(AudioFrame::VT_AUDIO_BYTES, Some(0)).unwrap()}
+  }
+}
+
+impl flatbuffers::Verifiable for AudioFrame<'_> {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.visit_table(pos)?
+     .visit_field::<u64>("audio_bytes", Self::VT_AUDIO_BYTES, false)?
+     .finish();
+    Ok(())
+  }
+}
+pub struct AudioFrameArgs {
+    pub audio_bytes: u64,
+}
+impl<'a> Default for AudioFrameArgs {
+  #[inline]
+  fn default() -> Self {
+    AudioFrameArgs {
+      audio_bytes: 0,
+    }
+  }
+}
+
+pub struct AudioFrameBuilder<'a: 'b, 'b> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+}
+impl<'a: 'b, 'b> AudioFrameBuilder<'a, 'b> {
+  #[inline]
+  pub fn add_audio_bytes(&mut self, audio_bytes: u64) {
+    self.fbb_.push_slot::<u64>(AudioFrame::VT_AUDIO_BYTES, audio_bytes, 0);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> AudioFrameBuilder<'a, 'b> {
+    let start = _fbb.start_table();
+    AudioFrameBuilder {
+      fbb_: _fbb,
+      start_: start,
+    }
+  }
+  #[inline]
+  pub fn finish(self) -> flatbuffers::WIPOffset<AudioFrame<'a>> {
+    let o = self.fbb_.end_table(self.start_);
+    flatbuffers::WIPOffset::new(o.value())
+  }
+}
+
+impl core::fmt::Debug for AudioFrame<'_> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    let mut ds = f.debug_struct("AudioFrame");
+      ds.field("audio_bytes", &self.audio_bytes());
+      ds.finish()
+  }
+}
+}  // pub mod audio
+
+#[allow(unused_imports, dead_code)]
 pub mod video {
 
   use core::mem;
@@ -25,7 +463,7 @@ pub const ENUM_MAX_VIDEO_CODEC: i8 = 3;
 #[deprecated(since = "2.0.0", note = "Use associated constants instead. This will no longer be generated in 2021.")]
 #[allow(non_camel_case_types)]
 pub const ENUM_VALUES_VIDEO_CODEC: [VideoCodec; 4] = [
-  VideoCodec::Empty,
+  VideoCodec::Null,
   VideoCodec::Bgra8888,
   VideoCodec::Rgb24,
   VideoCodec::Jpeg,
@@ -36,7 +474,7 @@ pub const ENUM_VALUES_VIDEO_CODEC: [VideoCodec; 4] = [
 pub struct VideoCodec(pub i8);
 #[allow(non_upper_case_globals)]
 impl VideoCodec {
-  pub const Empty: Self = Self(0);
+  pub const Null: Self = Self(0);
   pub const Bgra8888: Self = Self(1);
   pub const Rgb24: Self = Self(2);
   pub const Jpeg: Self = Self(3);
@@ -44,7 +482,7 @@ impl VideoCodec {
   pub const ENUM_MIN: i8 = 0;
   pub const ENUM_MAX: i8 = 3;
   pub const ENUM_VALUES: &'static [Self] = &[
-    Self::Empty,
+    Self::Null,
     Self::Bgra8888,
     Self::Rgb24,
     Self::Jpeg,
@@ -52,7 +490,7 @@ impl VideoCodec {
   /// Returns the variant's name or "" if unknown.
   pub fn variant_name(self) -> Option<&'static str> {
     match self {
-      Self::Empty => Some("Empty"),
+      Self::Null => Some("Null"),
       Self::Bgra8888 => Some("Bgra8888"),
       Self::Rgb24 => Some("Rgb24"),
       Self::Jpeg => Some("Jpeg"),
@@ -499,8 +937,9 @@ impl<'a> flatbuffers::Follow<'a> for NotifyVideoStart<'a> {
 }
 
 impl<'a> NotifyVideoStart<'a> {
-  pub const VT_RESOLUTION: flatbuffers::VOffsetT = 4;
-  pub const VT_DESKTOP_CODEC: flatbuffers::VOffsetT = 6;
+  pub const VT_STREAM: flatbuffers::VOffsetT = 4;
+  pub const VT_RESOLUTION: flatbuffers::VOffsetT = 6;
+  pub const VT_DESKTOP_CODEC: flatbuffers::VOffsetT = 8;
 
   #[inline]
   pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -513,11 +952,19 @@ impl<'a> NotifyVideoStart<'a> {
   ) -> flatbuffers::WIPOffset<NotifyVideoStart<'bldr>> {
     let mut builder = NotifyVideoStartBuilder::new(_fbb);
     if let Some(x) = args.resolution { builder.add_resolution(x); }
+    builder.add_stream(args.stream);
     builder.add_desktop_codec(args.desktop_codec);
     builder.finish()
   }
 
 
+  #[inline]
+  pub fn stream(&self) -> u16 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u16>(NotifyVideoStart::VT_STREAM, Some(0)).unwrap()}
+  }
   #[inline]
   pub fn resolution(&self) -> Option<&'a Size2u> {
     // Safety:
@@ -530,7 +977,7 @@ impl<'a> NotifyVideoStart<'a> {
     // Safety:
     // Created from valid Table for this object
     // which contains a valid value in this slot
-    unsafe { self._tab.get::<VideoCodec>(NotifyVideoStart::VT_DESKTOP_CODEC, Some(VideoCodec::Empty)).unwrap()}
+    unsafe { self._tab.get::<VideoCodec>(NotifyVideoStart::VT_DESKTOP_CODEC, Some(VideoCodec::Null)).unwrap()}
   }
 }
 
@@ -541,6 +988,7 @@ impl flatbuffers::Verifiable for NotifyVideoStart<'_> {
   ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
     use self::flatbuffers::Verifiable;
     v.visit_table(pos)?
+     .visit_field::<u16>("stream", Self::VT_STREAM, false)?
      .visit_field::<Size2u>("resolution", Self::VT_RESOLUTION, false)?
      .visit_field::<VideoCodec>("desktop_codec", Self::VT_DESKTOP_CODEC, false)?
      .finish();
@@ -548,6 +996,7 @@ impl flatbuffers::Verifiable for NotifyVideoStart<'_> {
   }
 }
 pub struct NotifyVideoStartArgs<'a> {
+    pub stream: u16,
     pub resolution: Option<&'a Size2u>,
     pub desktop_codec: VideoCodec,
 }
@@ -555,8 +1004,9 @@ impl<'a> Default for NotifyVideoStartArgs<'a> {
   #[inline]
   fn default() -> Self {
     NotifyVideoStartArgs {
+      stream: 0,
       resolution: None,
-      desktop_codec: VideoCodec::Empty,
+      desktop_codec: VideoCodec::Null,
     }
   }
 }
@@ -567,12 +1017,16 @@ pub struct NotifyVideoStartBuilder<'a: 'b, 'b> {
 }
 impl<'a: 'b, 'b> NotifyVideoStartBuilder<'a, 'b> {
   #[inline]
+  pub fn add_stream(&mut self, stream: u16) {
+    self.fbb_.push_slot::<u16>(NotifyVideoStart::VT_STREAM, stream, 0);
+  }
+  #[inline]
   pub fn add_resolution(&mut self, resolution: &Size2u) {
     self.fbb_.push_slot_always::<&Size2u>(NotifyVideoStart::VT_RESOLUTION, resolution);
   }
   #[inline]
   pub fn add_desktop_codec(&mut self, desktop_codec: VideoCodec) {
-    self.fbb_.push_slot::<VideoCodec>(NotifyVideoStart::VT_DESKTOP_CODEC, desktop_codec, VideoCodec::Empty);
+    self.fbb_.push_slot::<VideoCodec>(NotifyVideoStart::VT_DESKTOP_CODEC, desktop_codec, VideoCodec::Null);
   }
   #[inline]
   pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> NotifyVideoStartBuilder<'a, 'b> {
@@ -592,8 +1046,106 @@ impl<'a: 'b, 'b> NotifyVideoStartBuilder<'a, 'b> {
 impl core::fmt::Debug for NotifyVideoStart<'_> {
   fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
     let mut ds = f.debug_struct("NotifyVideoStart");
+      ds.field("stream", &self.stream());
       ds.field("resolution", &self.resolution());
       ds.field("desktop_codec", &self.desktop_codec());
+      ds.finish()
+  }
+}
+pub enum NotifyVideoStopOffset {}
+#[derive(Copy, Clone, PartialEq)]
+
+pub struct NotifyVideoStop<'a> {
+  pub _tab: flatbuffers::Table<'a>,
+}
+
+impl<'a> flatbuffers::Follow<'a> for NotifyVideoStop<'a> {
+  type Inner = NotifyVideoStop<'a>;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    Self { _tab: flatbuffers::Table::new(buf, loc) }
+  }
+}
+
+impl<'a> NotifyVideoStop<'a> {
+  pub const VT_STREAM: flatbuffers::VOffsetT = 4;
+
+  #[inline]
+  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+    NotifyVideoStop { _tab: table }
+  }
+  #[allow(unused_mut)]
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+    args: &'args NotifyVideoStopArgs
+  ) -> flatbuffers::WIPOffset<NotifyVideoStop<'bldr>> {
+    let mut builder = NotifyVideoStopBuilder::new(_fbb);
+    builder.add_stream(args.stream);
+    builder.finish()
+  }
+
+
+  #[inline]
+  pub fn stream(&self) -> u16 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u16>(NotifyVideoStop::VT_STREAM, Some(0)).unwrap()}
+  }
+}
+
+impl flatbuffers::Verifiable for NotifyVideoStop<'_> {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.visit_table(pos)?
+     .visit_field::<u16>("stream", Self::VT_STREAM, false)?
+     .finish();
+    Ok(())
+  }
+}
+pub struct NotifyVideoStopArgs {
+    pub stream: u16,
+}
+impl<'a> Default for NotifyVideoStopArgs {
+  #[inline]
+  fn default() -> Self {
+    NotifyVideoStopArgs {
+      stream: 0,
+    }
+  }
+}
+
+pub struct NotifyVideoStopBuilder<'a: 'b, 'b> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+}
+impl<'a: 'b, 'b> NotifyVideoStopBuilder<'a, 'b> {
+  #[inline]
+  pub fn add_stream(&mut self, stream: u16) {
+    self.fbb_.push_slot::<u16>(NotifyVideoStop::VT_STREAM, stream, 0);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> NotifyVideoStopBuilder<'a, 'b> {
+    let start = _fbb.start_table();
+    NotifyVideoStopBuilder {
+      fbb_: _fbb,
+      start_: start,
+    }
+  }
+  #[inline]
+  pub fn finish(self) -> flatbuffers::WIPOffset<NotifyVideoStop<'a>> {
+    let o = self.fbb_.end_table(self.start_);
+    flatbuffers::WIPOffset::new(o.value())
+  }
+}
+
+impl core::fmt::Debug for NotifyVideoStop<'_> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    let mut ds = f.debug_struct("NotifyVideoStop");
+      ds.field("stream", &self.stream());
       ds.finish()
   }
 }
@@ -895,7 +1447,7 @@ impl<'a> CursorShape<'a> {
     // Safety:
     // Created from valid Table for this object
     // which contains a valid value in this slot
-    unsafe { self._tab.get::<VideoCodec>(CursorShape::VT_CODEC, Some(VideoCodec::Empty)).unwrap()}
+    unsafe { self._tab.get::<VideoCodec>(CursorShape::VT_CODEC, Some(VideoCodec::Null)).unwrap()}
   }
   #[inline]
   pub fn xor(&self) -> bool {
@@ -948,7 +1500,7 @@ impl<'a> Default for CursorShapeArgs<'a> {
   fn default() -> Self {
     CursorShapeArgs {
       image: None,
-      codec: VideoCodec::Empty,
+      codec: VideoCodec::Null,
       xor: false,
       hotspot: None,
       resolution: None,
@@ -967,7 +1519,7 @@ impl<'a: 'b, 'b> CursorShapeBuilder<'a, 'b> {
   }
   #[inline]
   pub fn add_codec(&mut self, codec: VideoCodec) {
-    self.fbb_.push_slot::<VideoCodec>(CursorShape::VT_CODEC, codec, VideoCodec::Empty);
+    self.fbb_.push_slot::<VideoCodec>(CursorShape::VT_CODEC, codec, VideoCodec::Null);
   }
   #[inline]
   pub fn add_xor(&mut self, xor: bool) {
@@ -1008,4 +1560,328 @@ impl core::fmt::Debug for CursorShape<'_> {
   }
 }
 }  // pub mod video
+
+#[allow(unused_imports, dead_code)]
+pub mod control {
+
+  use core::mem;
+  use core::cmp::Ordering;
+
+  extern crate flatbuffers;
+  use self::flatbuffers::{EndianScalar, Follow};
+
+#[deprecated(since = "2.0.0", note = "Use associated constants instead. This will no longer be generated in 2021.")]
+pub const ENUM_MIN_CONTROL_PACKET: u8 = 0;
+#[deprecated(since = "2.0.0", note = "Use associated constants instead. This will no longer be generated in 2021.")]
+pub const ENUM_MAX_CONTROL_PACKET: u8 = 4;
+#[deprecated(since = "2.0.0", note = "Use associated constants instead. This will no longer be generated in 2021.")]
+#[allow(non_camel_case_types)]
+pub const ENUM_VALUES_CONTROL_PACKET: [ControlPacket; 5] = [
+  ControlPacket::NONE,
+  ControlPacket::video_NotifyVideoStart,
+  ControlPacket::video_NotifyVideoStop,
+  ControlPacket::audio_NotifyAudioStart,
+  ControlPacket::audio_NotifyAudioStop,
+];
+
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+#[repr(transparent)]
+pub struct ControlPacket(pub u8);
+#[allow(non_upper_case_globals)]
+impl ControlPacket {
+  pub const NONE: Self = Self(0);
+  pub const video_NotifyVideoStart: Self = Self(1);
+  pub const video_NotifyVideoStop: Self = Self(2);
+  pub const audio_NotifyAudioStart: Self = Self(3);
+  pub const audio_NotifyAudioStop: Self = Self(4);
+
+  pub const ENUM_MIN: u8 = 0;
+  pub const ENUM_MAX: u8 = 4;
+  pub const ENUM_VALUES: &'static [Self] = &[
+    Self::NONE,
+    Self::video_NotifyVideoStart,
+    Self::video_NotifyVideoStop,
+    Self::audio_NotifyAudioStart,
+    Self::audio_NotifyAudioStop,
+  ];
+  /// Returns the variant's name or "" if unknown.
+  pub fn variant_name(self) -> Option<&'static str> {
+    match self {
+      Self::NONE => Some("NONE"),
+      Self::video_NotifyVideoStart => Some("video_NotifyVideoStart"),
+      Self::video_NotifyVideoStop => Some("video_NotifyVideoStop"),
+      Self::audio_NotifyAudioStart => Some("audio_NotifyAudioStart"),
+      Self::audio_NotifyAudioStop => Some("audio_NotifyAudioStop"),
+      _ => None,
+    }
+  }
+}
+impl core::fmt::Debug for ControlPacket {
+  fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+    if let Some(name) = self.variant_name() {
+      f.write_str(name)
+    } else {
+      f.write_fmt(format_args!("<UNKNOWN {:?}>", self.0))
+    }
+  }
+}
+impl<'a> flatbuffers::Follow<'a> for ControlPacket {
+  type Inner = Self;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    let b = flatbuffers::read_scalar_at::<u8>(buf, loc);
+    Self(b)
+  }
+}
+
+impl flatbuffers::Push for ControlPacket {
+    type Output = ControlPacket;
+    #[inline]
+    unsafe fn push(&self, dst: &mut [u8], _written_len: usize) {
+        flatbuffers::emplace_scalar::<u8>(dst, self.0);
+    }
+}
+
+impl flatbuffers::EndianScalar for ControlPacket {
+  type Scalar = u8;
+  #[inline]
+  fn to_little_endian(self) -> u8 {
+    self.0.to_le()
+  }
+  #[inline]
+  #[allow(clippy::wrong_self_convention)]
+  fn from_little_endian(v: u8) -> Self {
+    let b = u8::from_le(v);
+    Self(b)
+  }
+}
+
+impl<'a> flatbuffers::Verifiable for ControlPacket {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    u8::run_verifier(v, pos)
+  }
+}
+
+impl flatbuffers::SimpleToVerifyInSlice for ControlPacket {}
+pub struct ControlPacketUnionTableOffset {}
+
+pub enum ControlFrameOffset {}
+#[derive(Copy, Clone, PartialEq)]
+
+pub struct ControlFrame<'a> {
+  pub _tab: flatbuffers::Table<'a>,
+}
+
+impl<'a> flatbuffers::Follow<'a> for ControlFrame<'a> {
+  type Inner = ControlFrame<'a>;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    Self { _tab: flatbuffers::Table::new(buf, loc) }
+  }
+}
+
+impl<'a> ControlFrame<'a> {
+  pub const VT_DATA_TYPE: flatbuffers::VOffsetT = 4;
+  pub const VT_DATA: flatbuffers::VOffsetT = 6;
+
+  #[inline]
+  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+    ControlFrame { _tab: table }
+  }
+  #[allow(unused_mut)]
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+    args: &'args ControlFrameArgs
+  ) -> flatbuffers::WIPOffset<ControlFrame<'bldr>> {
+    let mut builder = ControlFrameBuilder::new(_fbb);
+    if let Some(x) = args.data { builder.add_data(x); }
+    builder.add_data_type(args.data_type);
+    builder.finish()
+  }
+
+
+  #[inline]
+  pub fn data_type(&self) -> ControlPacket {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<ControlPacket>(ControlFrame::VT_DATA_TYPE, Some(ControlPacket::NONE)).unwrap()}
+  }
+  #[inline]
+  pub fn data(&self) -> Option<flatbuffers::Table<'a>> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Table<'a>>>(ControlFrame::VT_DATA, None)}
+  }
+  #[inline]
+  #[allow(non_snake_case)]
+  pub fn data_as_video_notify_video_start(&self) -> Option<super::video::NotifyVideoStart<'a>> {
+    if self.data_type() == ControlPacket::video_NotifyVideoStart {
+      self.data().map(|t| {
+       // Safety:
+       // Created from a valid Table for this object
+       // Which contains a valid union in this slot
+       unsafe { super::video::NotifyVideoStart::init_from_table(t) }
+     })
+    } else {
+      None
+    }
+  }
+
+  #[inline]
+  #[allow(non_snake_case)]
+  pub fn data_as_video_notify_video_stop(&self) -> Option<super::video::NotifyVideoStop<'a>> {
+    if self.data_type() == ControlPacket::video_NotifyVideoStop {
+      self.data().map(|t| {
+       // Safety:
+       // Created from a valid Table for this object
+       // Which contains a valid union in this slot
+       unsafe { super::video::NotifyVideoStop::init_from_table(t) }
+     })
+    } else {
+      None
+    }
+  }
+
+  #[inline]
+  #[allow(non_snake_case)]
+  pub fn data_as_audio_notify_audio_start(&self) -> Option<super::audio::NotifyAudioStart<'a>> {
+    if self.data_type() == ControlPacket::audio_NotifyAudioStart {
+      self.data().map(|t| {
+       // Safety:
+       // Created from a valid Table for this object
+       // Which contains a valid union in this slot
+       unsafe { super::audio::NotifyAudioStart::init_from_table(t) }
+     })
+    } else {
+      None
+    }
+  }
+
+  #[inline]
+  #[allow(non_snake_case)]
+  pub fn data_as_audio_notify_audio_stop(&self) -> Option<super::audio::NotifyAudioStop<'a>> {
+    if self.data_type() == ControlPacket::audio_NotifyAudioStop {
+      self.data().map(|t| {
+       // Safety:
+       // Created from a valid Table for this object
+       // Which contains a valid union in this slot
+       unsafe { super::audio::NotifyAudioStop::init_from_table(t) }
+     })
+    } else {
+      None
+    }
+  }
+
+}
+
+impl flatbuffers::Verifiable for ControlFrame<'_> {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.visit_table(pos)?
+     .visit_union::<ControlPacket, _>("data_type", Self::VT_DATA_TYPE, "data", Self::VT_DATA, false, |key, v, pos| {
+        match key {
+          ControlPacket::video_NotifyVideoStart => v.verify_union_variant::<flatbuffers::ForwardsUOffset<super::video::NotifyVideoStart>>("ControlPacket::video_NotifyVideoStart", pos),
+          ControlPacket::video_NotifyVideoStop => v.verify_union_variant::<flatbuffers::ForwardsUOffset<super::video::NotifyVideoStop>>("ControlPacket::video_NotifyVideoStop", pos),
+          ControlPacket::audio_NotifyAudioStart => v.verify_union_variant::<flatbuffers::ForwardsUOffset<super::audio::NotifyAudioStart>>("ControlPacket::audio_NotifyAudioStart", pos),
+          ControlPacket::audio_NotifyAudioStop => v.verify_union_variant::<flatbuffers::ForwardsUOffset<super::audio::NotifyAudioStop>>("ControlPacket::audio_NotifyAudioStop", pos),
+          _ => Ok(()),
+        }
+     })?
+     .finish();
+    Ok(())
+  }
+}
+pub struct ControlFrameArgs {
+    pub data_type: ControlPacket,
+    pub data: Option<flatbuffers::WIPOffset<flatbuffers::UnionWIPOffset>>,
+}
+impl<'a> Default for ControlFrameArgs {
+  #[inline]
+  fn default() -> Self {
+    ControlFrameArgs {
+      data_type: ControlPacket::NONE,
+      data: None,
+    }
+  }
+}
+
+pub struct ControlFrameBuilder<'a: 'b, 'b> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+}
+impl<'a: 'b, 'b> ControlFrameBuilder<'a, 'b> {
+  #[inline]
+  pub fn add_data_type(&mut self, data_type: ControlPacket) {
+    self.fbb_.push_slot::<ControlPacket>(ControlFrame::VT_DATA_TYPE, data_type, ControlPacket::NONE);
+  }
+  #[inline]
+  pub fn add_data(&mut self, data: flatbuffers::WIPOffset<flatbuffers::UnionWIPOffset>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(ControlFrame::VT_DATA, data);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> ControlFrameBuilder<'a, 'b> {
+    let start = _fbb.start_table();
+    ControlFrameBuilder {
+      fbb_: _fbb,
+      start_: start,
+    }
+  }
+  #[inline]
+  pub fn finish(self) -> flatbuffers::WIPOffset<ControlFrame<'a>> {
+    let o = self.fbb_.end_table(self.start_);
+    flatbuffers::WIPOffset::new(o.value())
+  }
+}
+
+impl core::fmt::Debug for ControlFrame<'_> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    let mut ds = f.debug_struct("ControlFrame");
+      ds.field("data_type", &self.data_type());
+      match self.data_type() {
+        ControlPacket::video_NotifyVideoStart => {
+          if let Some(x) = self.data_as_video_notify_video_start() {
+            ds.field("data", &x)
+          } else {
+            ds.field("data", &"InvalidFlatbuffer: Union discriminant does not match value.")
+          }
+        },
+        ControlPacket::video_NotifyVideoStop => {
+          if let Some(x) = self.data_as_video_notify_video_stop() {
+            ds.field("data", &x)
+          } else {
+            ds.field("data", &"InvalidFlatbuffer: Union discriminant does not match value.")
+          }
+        },
+        ControlPacket::audio_NotifyAudioStart => {
+          if let Some(x) = self.data_as_audio_notify_audio_start() {
+            ds.field("data", &x)
+          } else {
+            ds.field("data", &"InvalidFlatbuffer: Union discriminant does not match value.")
+          }
+        },
+        ControlPacket::audio_NotifyAudioStop => {
+          if let Some(x) = self.data_as_audio_notify_audio_stop() {
+            ds.field("data", &x)
+          } else {
+            ds.field("data", &"InvalidFlatbuffer: Union discriminant does not match value.")
+          }
+        },
+        _ => {
+          let x: Option<()> = None;
+          ds.field("data", &x)
+        },
+      };
+      ds.finish()
+  }
+}
+}  // pub mod control
 

@@ -68,13 +68,15 @@ impl ServerConnection for NativeServerConnection {
         Ok(NativeFetchResponse(res))
     }
 
-    async fn upgrade(mut self) -> Result<(NativeMessageSink, NativeMessageStream)> {
+    async fn upgrade(mut self, version: i32) -> Result<(NativeMessageSink, NativeMessageStream)> {
         let key = tungstenite::handshake::client::generate_key();
         let accept = tungstenite::handshake::derive_accept_key(key.as_bytes());
 
+        assert_eq!(version, 1);
+
         let req = Request::builder()
             .method(Method::GET)
-            .uri("/stream")
+            .uri("/stream?version=1")
             .header(HOST, "debug.test")
             .header(CONNECTION, "Upgrade")
             .header(UPGRADE, "websocket")

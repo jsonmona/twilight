@@ -31,6 +31,8 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{mpsc, watch};
 use tokio::task::{JoinHandle, JoinSet};
 
+// for now, stream 0 is control, stream 1 is video, stream 2 is audio
+
 pub struct TwilightServer {
     random: RefCell<Option<StdRng>>,
     capture_worker: RefCell<Option<JoinHandle<Result<()>>>>,
@@ -307,6 +309,11 @@ async fn handle_stream(mut req: Request<Body>, server: Rc<TwilightServer>) -> Re
         return handle_error(StatusCode::BAD_REQUEST);
     }
 
+    if req.uri().query().unwrap_or("") != "version=1" {
+        //TODO: Need to actually parse it
+        return handle_error(StatusCode::BAD_REQUEST);
+    }
+
     // initialize capture_worker
     let prev_worker = server.capture_worker.borrow_mut().take();
     if let Some(handle) = prev_worker {
@@ -415,10 +422,12 @@ async fn websocket_io(
     let sender = tokio::task::spawn(async move {
         let mut builder = FlatBufferBuilder::with_capacity(8192);
 
-        send_msg_with(&mut writer, &mut builder, |builder| {
+        //FIXME: Fixed stream id
+        send_msg_with(0, &mut writer, &mut builder, |builder| {
             NotifyVideoStart::create(
                 builder,
                 &NotifyVideoStartArgs {
+                    stream: 1,
                     resolution: Some(&Size2u::new(w, h)),
                     desktop_codec: VideoCodec::Jpeg,
                 },
@@ -438,7 +447,8 @@ async fn websocket_io(
             let cursor = update.cursor;
 
             let video_bytes = desktop.len().try_into()?;
-            send_msg_with(&mut writer, &mut builder, |builder| {
+            //FIXME: Fixed stream id
+            send_msg_with(1, &mut writer, &mut builder, |builder| {
                 let cursor_update = cursor.map(|cursor_state| {
                     let shape = cursor_state.shape.map(|cursor_shape| {
                         let image = Some(builder.create_vector(&cursor_shape.image.data));

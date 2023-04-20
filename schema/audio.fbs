@@ -1,0 +1,22 @@
+namespace audio;
+
+enum AudioCodec : byte {
+  Null = 0,
+  PcmF32le,
+}
+
+table NotifyAudioStart {
+  stream:uint16;
+  sampling_rate:uint32;
+  channels:uint32;
+  codec:AudioCodec;
+}
+
+table NotifyAudioStop {
+  stream:uint16;
+}
+
+table AudioFrame {
+  audio_bytes:uint64;
+}
+

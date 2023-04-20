@@ -11,4 +11,4 @@ set -eux
 
 OUT_DIR='./src/schema'
 
-flatc -o "$OUT_DIR" --rust schema/*.fbs
+flatc -o "$OUT_DIR" --gen-all --rust ./schema/schema.fbs

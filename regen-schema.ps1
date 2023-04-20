@@ -2,6 +2,4 @@
 
 $OUT_DIR="src\schema"
 
-$files = (Get-ChildItem .\schema\*.fbs | Select-Object -Expand FullName | Resolve-Path -Relative)
-
-flatc -o "$OUT_DIR" --rust $files
+flatc -o "$OUT_DIR" --gen-all --rust .\schema\schema.fbs

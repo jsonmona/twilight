@@ -104,12 +104,12 @@ async fn worker<Conn: ServerConnection>(
         bail!("unable to authenticate: status={}", res.status());
     }
 
-    let (_sink, mut stream) = conn.upgrade().await?;
+    let (_sink, mut rx) = conn.upgrade(1).await?;
 
     let msg = tokio::select! {
         biased;
         _ = shutdown.changed() => return Ok(()),
-        x = stream.recv() => x,
+        x = rx.recv() => x,
     };
 
     let msg = match msg {
@@ -117,7 +117,10 @@ async fn worker<Conn: ServerConnection>(
         None => bail!("resolution not received"),
     };
 
-    let start: NotifyVideoStart = parse_msg(&msg)?;
+    let stream = u16::from_le_bytes((&msg[..2]).try_into().unwrap());
+    assert_eq!(stream, 0);
+
+    let start: NotifyVideoStart = parse_msg(&msg[2..])?;
     let desktop_codec = start.desktop_codec();
     let resolution = start
         .resolution()
@@ -145,7 +148,7 @@ async fn worker<Conn: ServerConnection>(
         let msg = tokio::select! {
             biased;
             _ = shutdown.changed() => break,
-            x = stream.recv() => x,
+            x = rx.recv() => x,
         };
 
         // None => normal close
@@ -154,12 +157,15 @@ async fn worker<Conn: ServerConnection>(
             None => break,
         };
 
-        let frame: VideoFrame = parse_msg(&msg)?;
+        let stream = u16::from_le_bytes((&msg[..2]).try_into().unwrap());
+        assert_eq!(stream, 1);
+
+        let frame: VideoFrame = parse_msg(&msg[2..])?;
 
         let payload = tokio::select! {
             biased;
             _ = shutdown.changed() => break,
-            x = stream.recv() => x,
+            x = rx.recv() => x,
         };
 
         let payload: Bytes = match payload {
