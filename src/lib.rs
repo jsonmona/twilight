@@ -1,3 +1,4 @@
+pub mod audio;
 pub mod client;
 pub mod image;
 pub mod network;

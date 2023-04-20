@@ -1,4 +1,4 @@
-use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion};
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use rand::prelude::*;
 use rand_xoshiro::Xoshiro256PlusPlus;
 use twilight::image::{ColorFormat, ImageBuf};
