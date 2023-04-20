@@ -23,7 +23,7 @@ fn main() {
         ClientLaunchArgs {
             host: "127.0.0.1".into(),
             port: None,
-            cleartext: false,
+            cleartext: true,
         },
     );
 }
