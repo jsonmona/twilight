@@ -17,6 +17,7 @@ That also means I don't really have any time to work on this project. :(
 ## Building
 The building process is done and tested in windows.
 To start building you need to have [nasm](https://www.nasm.us), [cmake](https://cmake.org) and [rust](https://cmake.org) installed on your system.
+
 In the project folder run the cargo command to build: ```cargo build```
 
 After it builds successfully, go to the "target" folder and then into the "debug" folder, there will be the executables.
