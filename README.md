@@ -23,7 +23,7 @@ In the project folder run the cargo command to build: ```cargo build```.
 After it builds successfully, go to the "target" folder and then into the "debug" folder, there will be the executables.
 
 ## Use
-⚠️It only works with the local ip 127.0.0.1, since it is not yet ready for external ips.
+⚠️It only works with the local IP 127.0.0.1, since it is not yet ready for external IP's.
 There are 2 ways to use it:
 1. If you want to do a quick debug, run the "debug" executable.
 2. If you want to use both the server and the client, first run the server executable with the command: ```server.exe```.
