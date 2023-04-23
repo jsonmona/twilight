@@ -18,7 +18,7 @@ That also means I don't really have any time to work on this project. :(
 The building process is done and tested in windows.
 To start building you need to have [nasm](https://www.nasm.us), [cmake](https://cmake.org) and [rust](https://cmake.org) installed on your system.
 
-In the project folder run the cargo command to build: ```cargo build```
+In the project folder run the cargo command to build: ```cargo build```.
 
 After it builds successfully, go to the "target" folder and then into the "debug" folder, there will be the executables.
 
@@ -26,15 +26,15 @@ After it builds successfully, go to the "target" folder and then into the "debug
 ⚠️It only works with the local ip 127.0.0.1, since it is not yet ready for external ips.
 There are 2 ways to use it:
 1. If you want to do a quick debug, run the "debug" executable.
-2. If you want to use both the server and the client, first run the server executable with the command: ```server.exe```
-And for the client you can use: ```client.exe 127.0.0.1 --cleartext```
+2. If you want to use both the server and the client, first run the server executable with the command: ```server.exe```.
+And for the client you can use: ```client.exe 127.0.0.1 --cleartext```.
 
-For more information run the command: ```client.exe --help```
+For more information run the command: ```client.exe --help```.
 
 
 
 ## Contribute
-Help contribute to this project by sending issues or pull requests, they are appreciated and you will help the project :)
+Help contribute to this project by sending issues or pull requests, they are appreciated and you will help the project. :)
 
 It may take a long time to respond as the note says.
 
