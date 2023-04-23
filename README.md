@@ -31,6 +31,7 @@ For more information run the command: ```client.exe --help```
 
 ## Contribute
 Help contribute to this project by sending issues or pull requests, they are appreciated and you will help the project :)
+
 It may take a long time to respond as the note says.
 
 ## License
