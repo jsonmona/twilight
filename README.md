@@ -16,13 +16,14 @@ That also means I don't really have any time to work on this project. :(
 
 ## License
 
-Copyright (c) 2023. Yeomin Yoon. All rights reserved.
+This project is licensed under GPLv3 or (at your option) any later version of GPL released by Free Software Foundation.
 
-This project has no license attached yet.
-That effectively makes the project somewhat like a closed-source one.
-Of course, I plan to open source it.
-I just need some time to research which license to apply.
+A copy of GPLv3 license is available at file `LICENSE.txt`.
+You may visit https://www.gnu.org/licenses/ to find license text of GPLv3 or any later versions.
 
-I'm considering either GPLv3 or AGPLv3, with some additional clause to allow using vendor proprietary API like NVENC.
-As far as I understand, their API is incompatible with GPL style license, so they need some additional clause.
-I may be wrong, and that's why I hesitate to attach some license.
+As far as I understand, This project might need some additional clause to allow using vendor proprietary API like NVENC.
+The reason being that their API (or header file?) is incompatible with GPL style license, so they need some additional clause.
+If this turns out to be true, the project might undergo a re-licensing process.
+I'm not sure yet and has attached vanilla GPLv3 license for now.
+
+SPDX-License-Idenfitifer: GPL-3.0-or-later
