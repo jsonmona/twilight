@@ -1,8 +1,8 @@
-use std::io::Cursor;
 use crate::image::{ColorFormat, Image};
 use crate::video::encoder::stage::EncoderStage;
 use anyhow::{ensure, Context, Result};
 use jpeg_encoder::{ColorType, Encoder, SamplingFactor};
+use std::io::Cursor;
 
 #[derive(Debug)]
 pub struct JpegEncoder {
@@ -13,7 +13,10 @@ pub struct JpegEncoder {
 
 impl JpegEncoder {
     pub fn new(w: u32, h: u32, yuv444: bool) -> Result<Self> {
-        ensure!(w <= u16::MAX as u32 && h <= u16::MAX as u32, "image dimension cannot be larger than 65535");
+        ensure!(
+            w <= u16::MAX as u32 && h <= u16::MAX as u32,
+            "image dimension cannot be larger than 65535"
+        );
 
         Ok(JpegEncoder {
             width: w as u16,
@@ -35,7 +38,11 @@ impl EncoderStage for JpegEncoder {
 
         let mut encoder = Encoder::new(&mut cursor, 90);
 
-        encoder.set_sampling_factor(if self.yuv444 { SamplingFactor::R_4_4_4 } else { SamplingFactor::R_4_2_0 });
+        encoder.set_sampling_factor(if self.yuv444 {
+            SamplingFactor::R_4_4_4
+        } else {
+            SamplingFactor::R_4_2_0
+        });
 
         ensure!(
             self.width as u32 == img.width && self.height as u32 == img.height,
@@ -46,7 +53,8 @@ impl EncoderStage for JpegEncoder {
             img.height
         );
 
-        let color_type = color_format_to_color_type(img.color_format).context("unknown color_format")?;
+        let color_type =
+            color_format_to_color_type(img.color_format).context("unknown color_format")?;
 
         encoder.encode(img.data, self.width, self.height, color_type)?;
 
@@ -71,5 +79,8 @@ fn max_buffer_size(width: u16, height: u16) -> Option<usize> {
     let padded_w = (width as usize).checked_next_multiple_of(16)?;
     let padded_h = (height as usize).checked_next_multiple_of(16)?;
 
-    padded_w.checked_mul(padded_h)?.checked_mul(6)?.checked_add(2048)
+    padded_w
+        .checked_mul(padded_h)?
+        .checked_mul(6)?
+        .checked_add(2048)
 }

@@ -1,9 +1,9 @@
 use crate::image::{ColorFormat, Image, ImageBuf};
 use crate::video::decoder::DecoderStage;
 use anyhow::{ensure, Result};
-use zune_jpeg::JpegDecoder as JDecoder;
 use zune_jpeg::zune_core::colorspace::ColorSpace;
 use zune_jpeg::zune_core::options::DecoderOptions;
+use zune_jpeg::JpegDecoder as JDecoder;
 
 #[derive(Debug)]
 pub struct JpegDecoder {
@@ -13,7 +13,10 @@ pub struct JpegDecoder {
 
 impl JpegDecoder {
     pub fn new(w: u32, h: u32) -> Result<Self> {
-        ensure!(w <= u16::MAX as u32 && h <= u16::MAX as u32, "image dimension cannot be larger than 65535");
+        ensure!(
+            w <= u16::MAX as u32 && h <= u16::MAX as u32,
+            "image dimension cannot be larger than 65535"
+        );
 
         Ok(JpegDecoder {
             width: w as u16,
@@ -46,6 +49,12 @@ impl DecoderStage for JpegDecoder {
 
         let img = decoder.decode()?;
 
-        Ok(Image::new(self.width as u32, self.height as u32, self.width as u32 * 4, ColorFormat::Bgra8888, img))
+        Ok(Image::new(
+            self.width as u32,
+            self.height as u32,
+            self.width as u32 * 4,
+            ColorFormat::Bgra8888,
+            img,
+        ))
     }
 }
