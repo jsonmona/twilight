@@ -1,6 +1,5 @@
 use std::io::Cursor;
 use crate::image::{ColorFormat, Image};
-use crate::util::AsUsize;
 use crate::video::encoder::stage::EncoderStage;
 use anyhow::{ensure, Context, Result};
 use jpeg_encoder::{ColorType, Encoder, SamplingFactor};

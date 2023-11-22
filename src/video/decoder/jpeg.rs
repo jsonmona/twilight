@@ -1,5 +1,4 @@
 use crate::image::{ColorFormat, Image, ImageBuf};
-use crate::util::AsUsize;
 use crate::video::decoder::DecoderStage;
 use anyhow::{ensure, Result};
 use zune_jpeg::JpegDecoder as JDecoder;
