@@ -67,9 +67,13 @@ impl DxgiCaptureStage {
             let output_name = String::from_utf16_lossy(trim_null(&output_desc.DeviceName));
             info!("Selected output {output_name}");
 
-            let flags = D3D11_CREATE_DEVICE_SINGLETHREADED
-                | D3D11_CREATE_DEVICE_BGRA_SUPPORT
-                | D3D11_CREATE_DEVICE_DEBUG;
+            let mut flags = D3D11_CREATE_DEVICE_SINGLETHREADED
+                | D3D11_CREATE_DEVICE_BGRA_SUPPORT;
+
+            if option_env!("TWILIGHT_DEBUG_D3D") == Some("1") {
+                flags |= D3D11_CREATE_DEVICE_DEBUG;
+            }
+
             let feature_levels = [D3D_FEATURE_LEVEL_10_0, D3D_FEATURE_LEVEL_9_1];
             let mut selected_feature_level = zeroed();
             let mut p_ctx = zeroed();
