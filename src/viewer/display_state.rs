@@ -1,29 +1,28 @@
 use anyhow::{ensure, Context, Result};
 use winit::window::Window;
 
-pub struct DisplayState {
-    pub surface: wgpu::Surface,
+pub struct DisplayState<'window> {
+    pub surface: wgpu::Surface<'window>,
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
     pub surface_config: wgpu::SurfaceConfiguration,
     pub size: winit::dpi::PhysicalSize<u32>,
 }
 
-impl DisplayState {
+impl<'window> DisplayState<'window> {
     /// Must be called from main thread
-    pub async fn new(window: &Window) -> Result<Self> {
+    pub async fn new(window: &'window Window) -> Result<Self> {
         let size = window.inner_size();
 
         // Use DX12 on windows (due to swapchain issue on Nvidia optimus laptop)
-        let backends = if cfg!(target_os = "windows") {
-            wgpu::Backends::DX12
-        } else {
-            wgpu::Backends::PRIMARY
-        };
+        // But DX12 crashes for some reason after bumping version :(
+        let backends = wgpu::Backends::PRIMARY;
 
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends,
             dx12_shader_compiler: wgpu::Dx12Compiler::Fxc,
+            gles_minor_version: wgpu::Gles3MinorVersion::Automatic,
+            flags: Default::default(),
         });
 
         let surface = unsafe { instance.create_surface(window) }.expect("unable to create surface");
@@ -39,10 +38,10 @@ impl DisplayState {
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
-                    features: wgpu::Features::empty(),
-                    limits: wgpu::Limits::downlevel_webgl2_defaults()
+                    label: Some("default device"),
+                    required_features: wgpu::Features::empty(),
+                    required_limits: wgpu::Limits::downlevel_webgl2_defaults()
                         .using_resolution(adapter.limits()),
-                    label: None,
                 },
                 None,
             )
@@ -61,6 +60,7 @@ impl DisplayState {
             present_mode: wgpu::PresentMode::AutoVsync,
             alpha_mode: wgpu::CompositeAlphaMode::Opaque,
             view_formats: vec![wgpu::TextureFormat::Bgra8Unorm],
+            desired_maximum_frame_latency: 2,
         };
         surface.configure(&device, &surface_config);
 
@@ -110,10 +110,12 @@ impl DisplayState {
                         b: 0.0,
                         a: 1.0,
                     }),
-                    store: true,
+                    store: wgpu::StoreOp::Store,
                 },
             })],
             depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
         });
 
         self.queue.submit(std::iter::once(encoder.finish()));

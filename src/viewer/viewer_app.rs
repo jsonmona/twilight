@@ -23,7 +23,9 @@ impl ViewerApp {
     /// Must be called from main thread
     pub fn new(rt: Handle) -> Self {
         ViewerApp {
-            event_loop: EventLoopBuilder::<TwilightClientEvent>::with_user_event().build(),
+            event_loop: EventLoopBuilder::<TwilightClientEvent>::with_user_event()
+                .build()
+                .unwrap(),
             on_exit: None,
             _rt: rt,
             _guard: Default::default(),
@@ -42,7 +44,7 @@ impl ViewerApp {
     pub async fn launch(mut self) -> ! {
         let window = WindowBuilder::new().build(&self.event_loop).unwrap();
 
-        let mut display_state;
+        let mut display_state: Option<DisplayState<'static>>;
         let mut desktop_view: Option<DesktopView> = None;
 
         cfg_if! {
@@ -58,19 +60,24 @@ impl ViewerApp {
         let mut frames = 0u32;
 
         self.event_loop
-            .run(move |event, _, control_flow| match event {
+            .run(move |event, event_loop| match event {
                 Event::NewEvents(event::StartCause::Init) => {
-                    *control_flow = ControlFlow::Wait;
+                    event_loop.set_control_flow(ControlFlow::Wait);
                 }
                 Event::Resumed => {
                     // Initialize graphic state here
                     //TODO: What to do when display_state is not none? (relevant on mobile platforms)
                     if display_state.is_none() {
-                        display_state =
-                            Some(pollster::block_on(DisplayState::new(&window)).unwrap());
+                        log::error!("Unsound transmute of Window.");
+                        //FIXME: Killing lifetime to maintain previous code structure.
+                        //       Will remove this when refactoring.
+                        display_state = unsafe {
+                            let ds = pollster::block_on(DisplayState::new(&window)).unwrap();
+                            let ds = std::mem::transmute(ds);
+                            Some(ds)
+                        };
                     }
                 }
-                Event::MainEventsCleared => {}
                 Event::UserEvent(kind) => match kind {
                     TwilightClientEvent::Connected { width, height } => {
                         info!("Connected to {width}x{height}");
@@ -87,43 +94,12 @@ impl ViewerApp {
                     TwilightClientEvent::Closed(r) => {
                         //FIXME: Anything better to do than unwrap?
                         r.unwrap();
-                        *control_flow = ControlFlow::Exit;
+                        event_loop.exit();
                     }
                 },
-                Event::RedrawRequested(_) => {
-                    *control_flow = ControlFlow::Wait;
-
-                    let state = display_state.as_mut().unwrap();
-
-                    let elapsed = Instant::now() - old_time;
-                    if elapsed > Duration::from_secs(10) {
-                        let fps = frames as f64 / elapsed.as_secs_f64();
-                        info!("Render FPS={fps:.2}");
-                        old_time = Instant::now();
-                        frames = 0;
-                    }
-                    frames += 1;
-
-                    let render_result = match desktop_view.as_mut() {
-                        Some(x) => x.render(state),
-                        None => state.render_empty(),
-                    };
-
-                    match render_result {
-                        Ok(_) => {}
-                        Err(wgpu::SurfaceError::Lost) => {
-                            state.reconfigure_surface();
-                            window.request_redraw();
-                        }
-                        Err(e) => {
-                            error!("{e}");
-                            *control_flow = ControlFlow::ExitWithCode(1);
-                        }
-                    }
-                }
                 Event::WindowEvent {
-                    ref event,
                     window_id,
+                    ref event,
                 } if window_id == window.id() => {
                     let state = display_state.as_mut().unwrap();
 
@@ -132,20 +108,52 @@ impl ViewerApp {
 
                     match event {
                         WindowEvent::CloseRequested => {
-                            *control_flow = ControlFlow::Exit;
+                            event_loop.exit();
                         }
                         WindowEvent::Resized(physical_size) => {
                             state.resize(*physical_size);
                             window.request_redraw();
                         }
-                        WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
-                            state.resize(**new_inner_size);
+                        WindowEvent::ScaleFactorChanged {
+                            inner_size_writer, ..
+                        } => {
+                            //FIXME: What should I do?
+                            //state.resize(**inner_size_writer);
                             window.request_redraw();
+                        }
+                        WindowEvent::RedrawRequested => {
+                            let state = display_state.as_mut().unwrap();
+
+                            let elapsed = Instant::now() - old_time;
+                            if elapsed > Duration::from_secs(10) {
+                                let fps = frames as f64 / elapsed.as_secs_f64();
+                                info!("Render FPS={fps:.2}");
+                                old_time = Instant::now();
+                                frames = 0;
+                            }
+                            frames += 1;
+
+                            let render_result = match desktop_view.as_mut() {
+                                Some(x) => x.render(state),
+                                None => state.render_empty(),
+                            };
+
+                            match render_result {
+                                Ok(_) => {}
+                                Err(wgpu::SurfaceError::Lost) => {
+                                    state.reconfigure_surface();
+                                    window.request_redraw();
+                                }
+                                Err(e) => {
+                                    error!("{e}");
+                                    event_loop.exit();
+                                }
+                            }
                         }
                         _ => {}
                     }
                 }
-                Event::LoopDestroyed => {
+                Event::LoopExiting => {
                     if let Some(f) = self.on_exit.take() {
                         if let Err(e) = f() {
                             error!("on_exit callback returned an error:\n{e:?}");
@@ -154,5 +162,8 @@ impl ViewerApp {
                 }
                 _ => {}
             })
+            .unwrap();
+
+        panic!("I need to be refactored after library version bump");
     }
 }

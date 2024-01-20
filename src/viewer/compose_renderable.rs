@@ -256,10 +256,12 @@ impl ComposeRenderable {
                         b: 0.0,
                         a: 1.0,
                     }),
-                    store: true,
+                    store: wgpu::StoreOp::Store,
                 },
             })],
             depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
         });
 
         let desktop_img = update.desktop;
@@ -292,8 +294,8 @@ impl ComposeRenderable {
             &desktop_img.data,
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: NonZeroU32::new(desktop_img.stride),
-                rows_per_image: NonZeroU32::new(desktop_img.height),
+                bytes_per_row: Some(desktop_img.stride),
+                rows_per_image: Some(desktop_img.height),
             },
             desktop_size,
         );
@@ -322,8 +324,8 @@ impl ComposeRenderable {
                     &temp_img.data,
                     wgpu::ImageDataLayout {
                         offset: 0,
-                        bytes_per_row: NonZeroU32::new(temp_img.stride),
-                        rows_per_image: NonZeroU32::new(temp_img.height),
+                        bytes_per_row: Some(temp_img.stride),
+                        rows_per_image: Some(temp_img.height),
                     },
                     wgpu::Extent3d {
                         width: 128,

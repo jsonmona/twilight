@@ -6,7 +6,7 @@ use log::{error, info};
 use std::ffi::c_void;
 use std::mem::zeroed;
 use std::ptr::slice_from_raw_parts;
-use windows::core::Interface;
+use windows::core::{ComInterface, Interface};
 use windows::Win32::Graphics::Direct3D::*;
 use windows::Win32::Graphics::Direct3D11::*;
 use windows::Win32::Graphics::Dxgi::Common::*;
@@ -67,8 +67,7 @@ impl DxgiCaptureStage {
             let output_name = String::from_utf16_lossy(trim_null(&output_desc.DeviceName));
             info!("Selected output {output_name}");
 
-            let mut flags = D3D11_CREATE_DEVICE_SINGLETHREADED
-                | D3D11_CREATE_DEVICE_BGRA_SUPPORT;
+            let mut flags = D3D11_CREATE_DEVICE_SINGLETHREADED | D3D11_CREATE_DEVICE_BGRA_SUPPORT;
 
             if option_env!("TWILIGHT_DEBUG_D3D") == Some("1") {
                 flags |= D3D11_CREATE_DEVICE_DEBUG;
@@ -112,9 +111,9 @@ impl DxgiCaptureStage {
                         Quality: 0,
                     },
                     Usage: D3D11_USAGE_STAGING,
-                    BindFlags: D3D11_BIND_FLAG(0),
-                    CPUAccessFlags: D3D11_CPU_ACCESS_READ,
-                    MiscFlags: D3D11_RESOURCE_MISC_FLAG(0),
+                    BindFlags: 0,
+                    CPUAccessFlags: D3D11_CPU_ACCESS_READ.0 as u32,
+                    MiscFlags: 0,
                 },
                 None,
                 Some(&mut p_staging_tex),

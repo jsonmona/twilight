@@ -3,19 +3,21 @@ use crate::schema::video::*;
 use crate::server::session_id::SessionId;
 use crate::util::{DesktopUpdate, UnwrappedRefMut};
 use crate::video::capture_pipeline;
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use cookie::{Cookie, SameSite};
 use flatbuffers::FlatBufferBuilder;
 use futures_util::stream::StreamExt;
 use futures_util::SinkExt;
-use hyper::body::HttpBody;
+use http_body_util::combinators::BoxBody;
+use http_body_util::{BodyExt, Full};
+use hyper::body::{Body, Bytes, Incoming};
 use hyper::http::uri::Scheme;
 use hyper::http::HeaderValue;
-use hyper::server::conn::Http;
 use hyper::service::service_fn;
-use hyper::{header, Body, Method, Request, Response, StatusCode};
+use hyper::{header, Method, Request, Response, StatusCode};
 use hyper_tungstenite::tungstenite::Message;
 use hyper_tungstenite::HyperWebsocket;
+use hyper_util::rt::TokioIo;
 use lazy_static::lazy_static;
 use log::{debug, error, info};
 use rand::prelude::*;
@@ -85,13 +87,13 @@ impl TwilightServer {
                     // CLion can't infer type from tokio::select!
                     let (stream, _addr): (TcpStream, SocketAddr) = x?;
 
-                    Http::new()
-                        .with_executor(LocalExec)
-                        .http1_header_read_timeout(Duration::from_secs(30))
-                        .serve_connection(stream, service_fn(move |x| service(x, Rc::clone(&this))))
-                        .with_upgrades()
+                    hyper_util::server::conn::auto::Builder::new(LocalExec)
+                        .serve_connection_with_upgrades(
+                            TokioIo::new(stream),
+                            service_fn(move |x| service(x, Rc::clone(&this))),
+                        )
                         .await
-                        .map_err(|e| e.into())
+                        .map_err(|e| anyhow!(e))
                 });
             }
 
@@ -159,9 +161,9 @@ where
 }
 
 async fn service(
-    req: Request<Body>,
+    req: Request<Incoming>,
     server: Rc<TwilightServer>,
-) -> Result<Response<Body>, Infallible> {
+) -> Result<Response<Full<Bytes>>, Infallible> {
     let prefix = "";
 
     let path = match req.uri().path().strip_prefix(prefix) {
@@ -186,7 +188,7 @@ struct Session {
 fn make_set_cookie_session(session_id: &SessionId, using_https: bool) -> HeaderValue {
     let session_str = session_id.to_hex();
 
-    let set_cookie = Cookie::build("session", session_str)
+    let set_cookie = Cookie::build(("session", session_str))
         .http_only(true)
         .expires(None)
         .same_site(SameSite::Strict)
@@ -198,33 +200,41 @@ fn make_set_cookie_session(session_id: &SessionId, using_https: bool) -> HeaderV
         .expect("set-cookie directive for session contains non-ascii character")
 }
 
-async fn read_body_with_maximum(body: &mut Body, max_len: usize) -> Option<Vec<u8>> {
-    let size_hint = body.size_hint().lower().try_into().ok()?;
+async fn read_body_with_maximum(body: &mut Incoming, max_len: usize) -> Result<Option<Vec<u8>>> {
+    let size_hint = match body.size_hint().lower().try_into().ok() {
+        Some(x) => x,
+        None => return Ok(None),
+    };
 
     if max_len < size_hint {
-        return None;
+        return Ok(None);
     }
 
     let mut buf = Vec::with_capacity(size_hint);
 
-    while let Some(segment) = body.data().await.and_then(|x| x.ok()) {
-        if max_len < buf.len() + segment.len() {
-            return None;
+    while let Some(frame) = body.frame().await {
+        let frame = match frame?.into_data() {
+            Ok(x) => x,
+            Err(_) => continue,
+        };
+
+        if max_len < buf.len() + frame.len() {
+            return Ok(None);
         }
 
-        buf.extend_from_slice(&segment);
+        buf.extend_from_slice(&frame);
     }
 
-    Some(buf)
+    Ok(Some(buf))
 }
 
-fn handle_error(code: StatusCode) -> Response<Body> {
-    let mut res = Response::new(Body::empty());
+fn handle_error(code: StatusCode) -> Response<Full<Bytes>> {
+    let mut res = Response::new(Default::default());
     *res.status_mut() = code;
     res
 }
 
-async fn handle_auth(req: Request<Body>, server: Rc<TwilightServer>) -> Response<Body> {
+async fn handle_auth(req: Request<Incoming>, server: Rc<TwilightServer>) -> Response<Full<Bytes>> {
     let query = req.uri().query().unwrap_or("");
 
     let mut types = query.split('&').filter_map(|seg| {
@@ -253,7 +263,10 @@ async fn handle_auth(req: Request<Body>, server: Rc<TwilightServer>) -> Response
     }
 }
 
-async fn handle_auth_username(req: Request<Body>, server: Rc<TwilightServer>) -> Response<Body> {
+async fn handle_auth_username(
+    req: Request<Incoming>,
+    server: Rc<TwilightServer>,
+) -> Response<Full<Bytes>> {
     const MAX_LEN: usize = 256;
 
     if *req.method() != Method::POST {
@@ -268,7 +281,7 @@ async fn handle_auth_username(req: Request<Body>, server: Rc<TwilightServer>) ->
 
     let mut body = req.into_body();
 
-    let username = match read_body_with_maximum(&mut body, MAX_LEN).await {
+    let username = match read_body_with_maximum(&mut body, MAX_LEN).await.unwrap() {
         Some(x) => x,
         None => return handle_error(StatusCode::PAYLOAD_TOO_LARGE),
     };
@@ -294,13 +307,16 @@ async fn handle_auth_username(req: Request<Body>, server: Rc<TwilightServer>) ->
     let session_id = server.assign_session(session);
     let set_session = make_set_cookie_session(&session_id, using_https);
 
-    let mut res = Response::new(Body::empty());
+    let mut res = Response::new(Default::default());
     *res.status_mut() = StatusCode::OK;
     res.headers_mut().insert(header::SET_COOKIE, set_session);
     res
 }
 
-async fn handle_stream(mut req: Request<Body>, server: Rc<TwilightServer>) -> Response<Body> {
+async fn handle_stream(
+    mut req: Request<Incoming>,
+    server: Rc<TwilightServer>,
+) -> Response<Full<Bytes>> {
     if *req.method() != Method::GET {
         return handle_error(StatusCode::METHOD_NOT_ALLOWED);
     }
@@ -319,7 +335,7 @@ async fn handle_stream(mut req: Request<Body>, server: Rc<TwilightServer>) -> Re
     if let Some(handle) = prev_worker {
         if !handle.is_finished() {
             //TODO: Allow multiple connections
-            let mut res = Response::new(Body::from("client already connected"));
+            let mut res = Response::new("client already connected".into());
             *res.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
             return res;
         } else {

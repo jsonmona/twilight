@@ -15,7 +15,7 @@ pub struct GdiCaptureStage {
     is_open: bool,
 
     hdc: HDC,
-    memdc: CreatedHDC,
+    memdc: HDC,
     width: u32,
     height: u32,
     bitmap: HBITMAP,
@@ -51,7 +51,7 @@ impl GdiCaptureStage {
                     biHeight: -(height as i32),
                     biPlanes: 1,
                     biBitCount: 32,
-                    biCompression: BI_RGB,
+                    biCompression: BI_RGB.0,
                     biSizeImage: 0,
                     biXPelsPerMeter: 0,
                     biYPelsPerMeter: 0,
@@ -112,15 +112,14 @@ impl CaptureStage for GdiCaptureStage {
                 0,
                 0,
                 SRCCOPY,
-            );
-            ensure!(ret.as_bool(), "failed to BitBlt");
+            )?;
 
             // Similar code in OBS: https://github.com/obsproject/obs-studio/blob/2ff210acfdf9f72ee6c845c9eacceae1886c275f/plugins/win-capture/cursor-capture.c#L201
             let mut cursor_info: CURSORINFO = zeroed();
             cursor_info.cbSize = size_of::<CURSORINFO>() as u32;
             let ret = GetCursorInfo(&mut cursor_info);
 
-            cursor_state = if ret.as_bool() {
+            cursor_state = if ret.is_ok() {
                 // only when GetCursorInfo succeeded
 
                 let shape = if self.last_cursor != cursor_info.hCursor {
@@ -128,7 +127,7 @@ impl CaptureStage for GdiCaptureStage {
 
                     let mut iconinfo = zeroed();
                     let ret = GetIconInfo(cursor_info.hCursor, &mut iconinfo);
-                    if ret.as_bool() {
+                    if ret.is_ok() {
                         let mut xor = false;
                         let cursor = get_cursor_color(&iconinfo, &mut xor)
                             .or_else(|| get_cursor_monochrome(&iconinfo, &mut xor));

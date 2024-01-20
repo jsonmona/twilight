@@ -32,14 +32,17 @@ impl DecoderStage for JpegDecoder {
 
     fn decode(&mut self, data: &[u8]) -> Result<ImageBuf> {
         let opts = DecoderOptions::new_fast().jpeg_set_out_colorspace(ColorSpace::BGRA);
-        let mut decoder = JDecoder::new_with_options(opts, data);
+        let mut decoder = JDecoder::new_with_options(data, opts);
 
         decoder.decode_headers()?;
 
         let (w, h) = decoder.dimensions().expect("headers already decoded");
 
+        ensure!(w < u16::MAX as usize, "image width(={}) too large", w);
+        ensure!(h < u16::MAX as usize, "image height(={}) too large", h);
+
         ensure!(
-            self.width == w && self.height == h,
+            self.width == w as u16 && self.height == h as u16,
             "image resolution changed from {}x{} to {}x{}",
             self.width,
             self.height,
