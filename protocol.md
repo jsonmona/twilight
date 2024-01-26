@@ -52,7 +52,7 @@ List available authenticate types.
 The list may change depending on the client IP.
 
 ---
-`POST /auth?type=????`
+`POST /auth/{type}`
 Authenticate the client with specified type.
 
 200 &rarr; Successfully authorized. Client may proceed.  
@@ -61,7 +61,7 @@ Others &rarr; Returns message as body (Unresolved question: how to localize them
 A successful response will set a cookie 🍪 to authenticate requests.
 
 ---
-`POST /auth?type=username`
+`POST /auth/username`
 Always accept the client.
 
 Client will send its username in the request body.

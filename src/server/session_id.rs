@@ -1,7 +1,8 @@
 use rand::{CryptoRng, RngCore};
-use std::fmt::Write;
+use serde::Serialize;
+use std::fmt::{Debug, Write};
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SessionId([u64; 4]);
 
 impl SessionId {
@@ -40,5 +41,20 @@ impl SessionId {
         rng.fill_bytes(data);
 
         SessionId(arr)
+    }
+}
+
+impl Debug for SessionId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("SessionId").field(&self.to_hex()).finish()
+    }
+}
+
+impl Serialize for SessionId {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_hex())
     }
 }
