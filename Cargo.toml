@@ -4,12 +4,15 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+actix = "0.13.2"
 actix-web = { version = "4.4.1", default-features = false, features = [
     "macros",
 ] }
+actix-web-actors = "4.2.0"
 anyhow = { version = "1.0.68", features = ["backtrace"] }
 async-trait = "0.1.64"
-bytemuck = { version = "1.13.0", features = ["derive", "extern_crate_std"] }
+bytemuck = { version = "1.13.0", features = ["derive", "extern_crate_std", "zeroable_maybe_uninit", "min_const_generics"] }
+bytes = "1.5.0"
 cfg-if = "1.0.0"
 clap = { version = "4.2.1", features = ["derive"] }
 cookie = "0.18.0"
@@ -34,6 +37,7 @@ regex = "1.7.1"
 rustc-hash = "1.1.0"
 serde = { version = "1.0.195", features = ["derive"] }
 serde_json = "1.0.111"
+smallvec = { version = "1.13.1", features = ["union", "const_generics", "serde"] }
 thiserror = "1.0.38"
 tokio = { version = "1.25.0", features = ["full"] }
 tokio-tungstenite = "0.21.0"

@@ -4,16 +4,23 @@ use actix_web::{
 };
 use anyhow::Result;
 
-use super::{handler_auth::handler_auth, session::SessionStorage};
+use crate::server::TwilightServer;
+
+use super::{
+    handler_auth::handler_auth, handler_capture::handler_capture, handler_stream::handler_stream,
+    SessionStorage,
+};
 
 pub async fn serve_web() -> Result<()> {
     let base_path = "/twilight";
 
     let session_storage = web::Data::new(SessionStorage::new());
+    let twilight_server = web::Data::new(TwilightServer::new());
 
     HttpServer::new(move || {
         App::new()
             .app_data(session_storage.clone())
+            .app_data(twilight_server.clone())
             .service(web::scope(base_path).configure(all_handlers))
     })
     .bind(("127.0.0.1", 3000))?
@@ -25,4 +32,6 @@ pub async fn serve_web() -> Result<()> {
 
 fn all_handlers(config: &mut ServiceConfig) {
     config.configure(handler_auth);
+    config.configure(handler_stream);
+    config.configure(handler_capture);
 }

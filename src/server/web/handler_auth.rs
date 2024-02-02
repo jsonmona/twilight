@@ -3,9 +3,9 @@ use lazy_static::lazy_static;
 use regex::Regex;
 use serde::Serialize;
 
-use crate::server::session_id::SessionId;
+use crate::server::web::Sessions;
 
-use super::session::Sessions;
+use super::SessionId;
 
 pub fn handler_auth(cfg: &mut web::ServiceConfig) {
     cfg.service((auth_username,));

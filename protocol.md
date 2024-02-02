@@ -83,11 +83,55 @@ Endpoints described here needs the authorization header,
 or they will return 403 Forbidden.
 
 ---
-`GET /stream/v1`
+`POST /channel/{ch}/stop`
+Stops listening on the specified channel.
+
+---
+`GET /capture/desktop`
+Get information about the available desktops.
+
+Example:
+```json
+{
+    "monitor": [
+        {
+            "id": "(opaque handle)",
+            "name": "Generic PnP Monitor",
+            "resolution": "1920x1080",
+            /// Also can be specified as floating point number
+            "refresh_rate": "60000/1001",
+        }
+    ]
+}
+```
+
+---
+`POST /capture/desktop`
+Start streaming the desktop.
+
+Example request:
+```json
+{
+    "id": "(opaque handle)"
+}
+```
+
+Example response:
+```json
+{
+    /// The channel that the data is sent on.
+    "ch": 1,
+}
+```
+
+---
+`GET /stream/v1?auth={token}`
 Start WebSocket connection.
 
 It upgrades the underlying connection into the WebSocket connection.
-May return error if version is unsupported.
+May return error if the version is unsupported.
+
+Token is accepted via query string because of the browser limitation.
 
 
 ### WebSocket endpoint v1

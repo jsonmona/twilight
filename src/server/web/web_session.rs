@@ -2,19 +2,17 @@ use std::{
     collections::{BTreeMap, HashMap},
     fmt::{Debug, Display},
     ops::Deref,
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        Arc, Weak,
-    },
+    sync::{Arc, Weak},
     time::{Duration, Instant},
 };
 
-use actix_web::{FromRequest, HttpResponse, ResponseError};
+use actix::WeakAddr;
+use actix_web::{web, FromRequest, HttpResponse, ResponseError};
 use anyhow::{anyhow, Result};
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
 use rand::thread_rng;
 
-use crate::server::session_id::SessionId;
+use super::{SessionId, WebsocketActor};
 
 const EXPIRE_TIMEOUT: Duration = Duration::from_secs(30 * 60);
 
@@ -22,15 +20,17 @@ const EXPIRE_TIMEOUT: Duration = Duration::from_secs(30 * 60);
 pub type Sessions = Mutex<SessionStorage>;
 
 pub struct SessionStorage {
-    sessions: HashMap<SessionId, Weak<Session>>,
-    last_used: BTreeMap<(Instant, SessionId), Arc<Session>>,
+    sessions: HashMap<SessionId, Weak<WebSession>>,
+    last_used: BTreeMap<(Instant, SessionId), Arc<WebSession>>,
 }
 
-pub struct Session {
+pub struct WebSession {
     sid: SessionId,
-    stream_count: AtomicUsize,
+    stream: RwLock<Option<WeakAddr<WebsocketActor>>>,
     last_used: Mutex<Instant>,
 }
+
+pub struct SessionGuard(pub Arc<WebSession>);
 
 impl SessionStorage {
     pub fn new() -> Sessions {
@@ -40,7 +40,7 @@ impl SessionStorage {
         })
     }
 
-    pub fn create_session(&mut self) -> Result<Arc<Session>> {
+    pub fn create_session(&mut self) -> Result<Arc<WebSession>> {
         self.expire();
 
         let mut rng = thread_rng();
@@ -57,9 +57,9 @@ impl SessionStorage {
 
         let sid = sid.ok_or_else(|| anyhow!("unable to find empty session slot"))?;
         let now = Instant::now();
-        let session = Arc::new(Session {
+        let session = Arc::new(WebSession {
             sid: sid.clone(),
-            stream_count: AtomicUsize::new(0),
+            stream: RwLock::new(None),
             last_used: Mutex::new(now),
         });
 
@@ -79,7 +79,7 @@ impl SessionStorage {
         Ok(session)
     }
 
-    pub fn access(&mut self, sid: &SessionId) -> Option<Arc<Session>> {
+    pub fn access(&mut self, sid: &SessionId) -> Option<Arc<WebSession>> {
         self.expire();
 
         let session = self.sessions.get(sid)?.upgrade()?;
@@ -109,8 +109,7 @@ impl SessionStorage {
             }
 
             // last_used is before valid_after. Expire session if no stream is open.
-            //FIXME: is relaxed ordering enough?
-            if entry.get().stream_count.load(Ordering::Relaxed) == 0 {
+            if entry.get().is_stream_open() {
                 self.sessions.remove(&entry.key().1);
                 entry.remove();
             }
@@ -134,30 +133,41 @@ impl Debug for SessionStorage {
     }
 }
 
-impl Session {
+impl WebSession {
     pub fn sid(&self) -> &SessionId {
         &self.sid
     }
 
-    pub fn open_stream(self: &Arc<Self>) -> Result<StreamGuard> {
-        let prev_cnt = self.stream_count.fetch_add(1, Ordering::Relaxed);
-        if (isize::MAX - 1) as usize <= prev_cnt {
-            Err(anyhow!("too many stream open for {:?}", self.sid))
-        } else {
-            Ok(StreamGuard(Arc::clone(self)))
+    pub fn is_stream_open(&self) -> bool {
+        self.stream.read().is_some()
+    }
+
+    pub fn open_stream(&self, addr: WeakAddr<WebsocketActor>) -> Result<()> {
+        let mut stream = self.stream.write();
+        if stream.is_some() {
+            return Err(anyhow!(
+                "tried to open stream when already open for {:?}",
+                self.sid
+            ));
         }
+
+        *stream = Some(addr);
+        Ok(())
+    }
+
+    pub fn close_stream(&self) -> Result<()> {
+        let mut stream = self.stream.write();
+        if stream.is_none() {
+            return Err(anyhow!(
+                "tried to close stream when not open for {:?}",
+                self.sid
+            ));
+        }
+
+        *stream = None;
+        Ok(())
     }
 }
-
-pub struct StreamGuard(Arc<Session>);
-
-impl Drop for StreamGuard {
-    fn drop(&mut self) {
-        self.0.stream_count.fetch_sub(1, Ordering::Relaxed);
-    }
-}
-
-pub struct SessionGuard(pub Arc<Session>);
 
 impl FromRequest for SessionGuard {
     type Error = UnauthorizedError;
@@ -169,14 +179,12 @@ impl FromRequest for SessionGuard {
         _payload: &mut actix_web::dev::Payload,
     ) -> Self::Future {
         let f = move || {
-            let storage = req.app_data::<Sessions>()?;
+            let storage = req.app_data::<web::Data<Sessions>>()?;
 
             let auth = req.headers().get(actix_web::http::header::AUTHORIZATION)?;
-            let auth = std::str::from_utf8(auth.as_bytes())
-                .ok()?
-                .to_ascii_lowercase();
+            let auth = std::str::from_utf8(auth.as_bytes()).ok()?;
 
-            let token = auth.strip_prefix("bearer")?;
+            let token = auth.strip_prefix("Bearer ")?.trim();
             let sid = SessionId::from_hex(token)?;
 
             Some(Self(storage.lock().access(&sid)?))
@@ -187,7 +195,7 @@ impl FromRequest for SessionGuard {
 }
 
 impl Deref for SessionGuard {
-    type Target = Arc<Session>;
+    type Target = Arc<WebSession>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
