@@ -58,7 +58,14 @@ Authenticate the client with specified type.
 200 &rarr; Successfully authorized. Client may proceed.  
 Others &rarr; Returns message as body (Unresolved question: how to localize them?)
 
-A successful response will set a cookie 🍪 to authenticate requests.
+A successful response will contain authorization token.
+It must be included in `Authorization` header using `Bearer` scheme for privileged endpoints.
+
+```json
+{
+    "token": "(a token)"
+}
+```
 
 ---
 `POST /auth/username`
@@ -72,13 +79,11 @@ This auth type is insecure and is mainly for debugging.
 ---
 
 #### Privileged endpoints
-Endpoints described here needs the authentication cookie 🍪,
+Endpoints described here needs the authorization header,
 or they will return 403 Forbidden.
 
-Might use Authorization: Bearer token instead. Not decided yet.
-
 ---
-`GET /stream?version=1`
+`GET /stream/v1`
 Start WebSocket connection.
 
 It upgrades the underlying connection into the WebSocket connection.
