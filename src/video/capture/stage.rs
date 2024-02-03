@@ -1,18 +1,21 @@
-use crate::image::Image;
-use crate::util::DesktopUpdate;
+use crate::video::encoder::EncoderStage;
 use anyhow::Result;
 use std::fmt::Debug;
+use std::sync::Arc;
 
-pub trait CaptureStage: Debug {
-    fn resolution(&self) -> (u32, u32);
-    fn next(&mut self) -> Result<DesktopUpdate<Image<&[u8]>>>;
-    fn close(&mut self);
+use super::{RefreshRate, Resolution};
 
-    fn width(&self) -> u32 {
-        self.resolution().0
-    }
+pub trait CaptureStage: Debug + Send + Sync {
+    fn configured(&self) -> bool;
+    fn resolution(&self) -> Result<Resolution>;
+    fn refresh_rate(&self) -> Result<RefreshRate>;
 
-    fn height(&self) -> u32 {
-        self.resolution().1
-    }
+    fn set_next_stage(&self, encoder: Arc<dyn EncoderStage>) -> Result<()>;
+
+    fn configure(self: Arc<Self>) -> Result<()>;
+
+    fn shutdown(&self);
 }
+
+// ensure object safety
+const _: Option<&dyn CaptureStage> = None;

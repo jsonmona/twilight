@@ -25,7 +25,13 @@ pub struct GdiCaptureStage {
 }
 
 impl GdiCaptureStage {
-    pub fn new() -> Result<GdiCaptureStage> {
+    pub fn new(dev_id: &[u16]) -> Result<GdiCaptureStage> {
+        assert_eq!(
+            dev_id.last(),
+            Some(&0),
+            "dev_id must end with a NULL character"
+        );
+
         // SAFETY: FFI
         unsafe {
             //FIXME: Resource leak on early return
@@ -102,7 +108,7 @@ impl CaptureStage for GdiCaptureStage {
 
         let slice = unsafe {
             // SAFETY: FFI
-            let ret = BitBlt(
+            BitBlt(
                 self.memdc,
                 0,
                 0,

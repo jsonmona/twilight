@@ -1,16 +1,13 @@
-use crate::image::Image;
+use crate::{image::ImageBuf, util::DesktopUpdate};
 use anyhow::Result;
-use std::fmt::Debug;
+use std::{fmt::Debug, sync::Arc};
 
-pub trait EncoderStage: Send + Debug {
-    fn resolution(&self) -> (u32, u32);
-    fn encode(&mut self, img: Image<&[u8]>) -> Result<Vec<u8>>;
+pub trait EncoderStage: Debug + Send + Sync {
+    fn configured(&self) -> bool;
+    fn configure(self: Arc<Self>) -> Result<()>;
 
-    fn width(&self) -> u32 {
-        self.resolution().0
-    }
+    fn push(&self, update: DesktopUpdate<ImageBuf>);
+    fn pop(&self) -> Result<DesktopUpdate<Vec<u8>>>;
 
-    fn height(&self) -> u32 {
-        self.resolution().1
-    }
+    fn shutdown(&self);
 }
