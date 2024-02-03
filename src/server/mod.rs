@@ -6,4 +6,4 @@ mod web;
 use channel::*;
 
 pub use serve::serve;
-pub use twilight_server::TwilightServer;
+pub use twilight_server::*;

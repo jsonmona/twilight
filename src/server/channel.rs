@@ -10,7 +10,7 @@ use super::web::{OutgoingMessage, WebsocketActor};
 #[derive(Debug)]
 pub struct Channel {
     pub ch: u16,
-    clients: RwLock<SmallVec<[Addr<WebsocketActor>; 4]>>,
+    clients: RwLock<SmallVec<[Addr<WebsocketActor>; 2]>>,
 }
 
 impl Channel {
@@ -19,6 +19,11 @@ impl Channel {
             ch,
             clients: Default::default(),
         }
+    }
+
+    pub fn add_client(&self, addr: Addr<WebsocketActor>) {
+        //TODO: Remove closed actors
+        self.clients.write().push(addr);
     }
 
     pub async fn send_msg(&self, msg: Bytes) {

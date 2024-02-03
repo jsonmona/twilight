@@ -109,6 +109,8 @@ Example:
 `POST /capture/desktop`
 Start streaming the desktop.
 
+Generates status code `424 Failed Dependency` if stream is not open.
+
 Example request:
 ```json
 {
@@ -132,6 +134,9 @@ It upgrades the underlying connection into the WebSocket connection.
 May return error if the version is unsupported.
 
 Token is accepted via query string because of the browser limitation.
+
+Client may have at most 1 active stream at a once.
+It should close the existing stream in order to start another one.
 
 
 ### WebSocket endpoint v1

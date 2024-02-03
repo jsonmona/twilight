@@ -1,4 +1,5 @@
 use anyhow::Result;
+use parking_lot::RwLock;
 
 use std::{
     mem::MaybeUninit,
@@ -6,6 +7,9 @@ use std::{
 };
 
 use super::Channel;
+
+/// The type that's carried around
+pub type SharedTwilightServer = RwLock<TwilightServer>;
 
 /// Represents the server as whole.
 #[derive(Debug)]
@@ -15,11 +19,11 @@ pub struct TwilightServer {
 }
 
 impl TwilightServer {
-    pub fn new() -> Self {
-        Self {
+    pub fn new() -> SharedTwilightServer {
+        RwLock::new(Self {
             channels: boxed_array_of_weak(),
             next_channel: 0,
-        }
+        })
     }
 
     /// This function is called from async context. Never perform too much work.
@@ -30,20 +34,14 @@ impl TwilightServer {
     pub fn subscribe_desktop(&mut self, monitor: &str) -> Result<Arc<Channel>> {
         let channel = self.create_channel();
 
-        println!("subscripbe to desktop on monitor {monitor}");
+        println!("subscribe to desktop on monitor {monitor}");
         // create capture pipeline
 
         Ok(channel)
     }
 
     fn create_channel(&mut self) -> Arc<Channel> {
-        if self.channels.len() == u16::MAX as usize {
-            // all channels used up
-            panic!();
-        }
-
-        // Can be replaced by a loop, but uses for-loop instead just in case
-        for _ in 0..=(u16::MAX as u32) {
+        for _ in 0..(u16::MAX as u32) {
             let ch = self.next_channel;
             self.next_channel = ch.wrapping_add(1);
 

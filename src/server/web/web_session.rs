@@ -6,7 +6,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use actix::WeakAddr;
+use actix::{Addr, WeakAddr};
 use actix_web::{web, FromRequest, HttpResponse, ResponseError};
 use anyhow::{anyhow, Result};
 use parking_lot::{Mutex, RwLock};
@@ -136,6 +136,10 @@ impl Debug for SessionStorage {
 impl WebSession {
     pub fn sid(&self) -> &SessionId {
         &self.sid
+    }
+
+    pub fn stream(&self) -> Option<Addr<WebsocketActor>> {
+        self.stream.read().as_ref().and_then(|x| x.upgrade())
     }
 
     pub fn is_stream_open(&self) -> bool {
