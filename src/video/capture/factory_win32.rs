@@ -9,7 +9,9 @@ use windows::Win32::Foundation::*;
 use windows::Win32::Graphics::Gdi::*;
 use windows::{core::*, Win32::Graphics::Dxgi::CreateDXGIFactory1};
 
-use super::{CaptureDxgi, CaptureStage, MonitorInfo, RefreshRate, Resolution};
+use crate::network::dto::video::{MonitorInfo, RefreshRate, Resolution};
+
+use super::{CaptureDxgi, CaptureStage};
 
 pub struct CaptureFactoryWin32 {}
 

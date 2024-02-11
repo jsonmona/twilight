@@ -3,7 +3,7 @@ use anyhow::Result;
 use std::fmt::Debug;
 use std::sync::Arc;
 
-use super::{RefreshRate, Resolution};
+use crate::network::dto::video::{RefreshRate, Resolution};
 
 pub trait CaptureStage: Debug + Send + Sync {
     fn configured(&self) -> bool;

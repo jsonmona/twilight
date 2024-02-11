@@ -7,7 +7,10 @@ use std::{
     sync::{Arc, Weak},
 };
 
-use crate::{schema::video::*, util::DesktopUpdate, video::capture_pipeline};
+use crate::{
+    network::dto::video::MonitorInfo, schema::video::*, util::DesktopUpdate,
+    video::capture_pipeline,
+};
 
 use super::Channel;
 

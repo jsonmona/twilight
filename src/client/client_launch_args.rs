@@ -1,5 +1,7 @@
 use clap::Parser;
 
+use super::server_connection::Origin;
+
 const ABOUT: &str = "A CLI interface to Twilight Remote Desktop. The form of \
 arguments may change at any time during the alpha version.";
 
@@ -7,21 +9,19 @@ arguments may change at any time during the alpha version.";
 #[derive(Parser, Debug)]
 #[command(version, about = ABOUT, long_about = None)]
 pub struct ClientLaunchArgs {
-    /// The hostname or IP address of the server to connect to.
-    pub host: String,
-
-    /// The port number to connect to (default: 6498 with TLS, 6497 with cleartext).
-    pub port: Option<u16>,
-
-    /// Use cleartext transport (HTTP) instead of encrypted one (HTTPS).
-    #[arg(long)]
-    pub cleartext: bool,
-}
-
-impl ClientLaunchArgs {
-    /// Get effective port number
-    pub fn port(&self) -> u16 {
-        self.port
-            .unwrap_or(if !self.cleartext { 6498 } else { 6497 })
-    }
+    /// The URL to connect to. Example: twilight://127.0.0.1:1234/base/path
+    ///
+    /// If no scheme is given, it defaults to twilight.
+    /// If no port is given, the default value varies by the scheme.
+    /// If no base path (no slash at all), it defaults to "/twilight".
+    /// End with a slash to use empty base path.
+    ///
+    /// Available schemes: http, https, twilight, twilightc
+    ///
+    /// http and twilightc uses cleartext. Default port is 80 and 1518 respectively.  
+    /// https and twilight uses TLS. Default port is 443 and 1517 respectively.
+    ///
+    /// Current default value is for ease of debugging
+    #[clap(default_value = "twilightc://localhost/twilight")]
+    pub url: Origin,
 }

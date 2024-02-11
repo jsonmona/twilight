@@ -1,43 +1,33 @@
 use actix_web::{get, post, web, HttpResponse, Responder};
 use serde::Serialize;
-use smallvec::SmallVec;
 
-use crate::server::{web::SessionGuard, SharedTwilightServer};
+use crate::{
+    network::dto::video::{ChannelCreation, DesktopInfo, MonitorInfo, RefreshRate, Resolution},
+    server::{web::SessionGuard, SharedTwilightServer},
+};
 
 pub fn handler_capture(cfg: &mut web::ServiceConfig) {
     cfg.service((capture_desktop_get, capture_desktop_post));
 }
 
-#[derive(Debug, Serialize)]
-struct DesktopInfo {
-    monitor: SmallVec<[MonitorInfo; 2]>,
-}
-
-#[derive(Debug, Serialize)]
-struct MonitorInfo {
-    id: String,
-    name: String,
-    resolution: String,
-    refresh_rate: String,
-}
-
 #[get("/capture/desktop")]
-async fn capture_desktop_get(_session: SessionGuard) -> impl Responder {
+async fn capture_desktop_get(
+    _session: SessionGuard,
+    _server: web::Data<SharedTwilightServer>,
+) -> impl Responder {
     HttpResponse::Ok().json(DesktopInfo {
         monitor: [MonitorInfo {
             id: "dummy".into(),
             name: "dummy monitor".into(),
-            resolution: "0x0".into(),
-            refresh_rate: "0/0".into(),
+            resolution: Resolution {
+                height: 1920,
+                width: 1080,
+            },
+            refresh_rate: RefreshRate { den: 60, num: 1 },
         }]
         .into_iter()
         .collect(),
     })
-}
-
-#[derive(Debug, Serialize)]
-struct ChannelCreation {
-    ch: u16,
 }
 
 #[post("/capture/desktop")]

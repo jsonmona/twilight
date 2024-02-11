@@ -1,166 +1,181 @@
-use std::time::Duration;
+use std::fmt::Debug;
+use std::str::FromStr;
 
-use crate::client::server_connection::{
-    FetchResponse, MessageSink, MessageStream, ServerConnection,
-};
-use anyhow::{ensure, Result};
-use async_trait::async_trait;
-use futures_util::stream::{SplitSink, SplitStream};
-use futures_util::{SinkExt, StreamExt};
-use http_body_util::{BodyExt, Full};
-use hyper::body::{Bytes, Incoming};
-use hyper::header::{CONNECTION, HOST, UPGRADE};
-use hyper::upgrade::Upgraded;
-use hyper::{Method, Request, StatusCode};
-use hyper_util::client::legacy::connect::HttpConnector;
-use hyper_util::client::legacy::Client;
-use hyper_util::rt::{TokioExecutor, TokioIo};
-use log::error;
+use anyhow::Result;
+use bytes::Bytes;
+use fastwebsockets::{handshake, FragmentCollector, Frame, OpCode, WebSocketError};
+use futures_util::Future;
+use http_body_util::Empty;
+use hyper::{header, upgrade::Upgraded, Method, Request, StatusCode};
+use hyper_util::rt::TokioIo;
 use tokio::net::TcpStream;
-use tokio::task::JoinHandle;
-use tokio_tungstenite::WebSocketStream;
-use tungstenite::protocol::Role;
-use tungstenite::Message;
 
+use crate::client::server_connection::{FetchResponse, MessageStream, Origin, ServerConnection};
+
+#[derive(Debug)]
 pub struct NativeServerConnection {
-    client: Client<HttpConnector, Full<Bytes>>,
-    host: (String, u16),
+    origin: Origin,
+    auth: Option<String>,
+    client: reqwest::Client,
 }
 
 impl NativeServerConnection {
-    pub async fn new(host: &str, port: u16) -> Result<Self> {
-        let client = hyper_util::client::legacy::Builder::new(TokioExecutor::new())
-            .pool_idle_timeout(Duration::from_secs(30))
-            .build_http();
+    pub async fn new(origin: Origin) -> Result<Self> {
+        let client = reqwest::Client::builder();
 
         Ok(NativeServerConnection {
-            client,
-            host: (host.into(), port),
+            origin,
+            auth: Default::default(),
+            client: client.build()?,
         })
     }
 
-    pub async fn close(self) -> Result<()> {
-        Ok(())
+    fn get_url(&self, path: &str) -> String {
+        if self.origin.path.is_empty() {
+            format!("http://{}:{}{path}", self.origin.host, self.origin.port)
+        } else {
+            format!(
+                "http://{}:{}{}{path}",
+                self.origin.host, self.origin.port, self.origin.path
+            )
+        }
     }
 }
 
-#[async_trait]
 impl ServerConnection for NativeServerConnection {
     type FetchResponseImpl = NativeFetchResponse;
-    type MessageSinkImpl = NativeMessageSink;
     type MessageStreamImpl = NativeMessageStream;
 
-    fn host(&self) -> &str {
-        "debug.test"
+    async fn close(self) {}
+
+    fn origin(&self) -> &Origin {
+        &self.origin
+    }
+
+    fn set_auth(&mut self, token: String) {
+        self.auth = Some(token);
+    }
+
+    fn clear_auth(&mut self) {
+        self.auth = None;
     }
 
     async fn fetch(
         &mut self,
         method: Method,
         path: &str,
-        data: &[u8],
+        data: Bytes,
     ) -> Result<NativeFetchResponse> {
-        let uri = format!("http://{}:{}{path}", self.host.0, self.host.1);
+        let url = self.get_url(path);
 
-        let req = hyper::Request::builder()
-            .method(method)
-            .uri(&uri)
-            .header(HOST, "debug.test")
-            .body(Vec::from(data).into())?;
+        // FIXME: Remove this when reqwest updates to use hyper 1.0
+        let method = reqwest::Method::from_str(method.as_str()).unwrap();
 
-        let res = self.client.request(req).await?;
+        let builder = self.client.request(method, url).body(data);
 
-        Ok(NativeFetchResponse(res))
+        // attach bearer token if available
+        let builder = if let Some(bearer) = self.auth.as_ref() {
+            builder.bearer_auth(bearer)
+        } else {
+            builder
+        };
+
+        Ok(NativeFetchResponse(builder.send().await?))
     }
 
-    async fn upgrade(mut self, version: i32) -> Result<(NativeMessageSink, NativeMessageStream)> {
-        let key = tungstenite::handshake::client::generate_key();
-        let accept = tungstenite::handshake::derive_accept_key(key.as_bytes());
-
+    async fn stream(&mut self, version: i32) -> Result<NativeMessageStream> {
         assert_eq!(version, 1);
 
-        let uri = format!("http://{}:{}/stream?version=1", self.host.0, self.host.1);
+        let stream = TcpStream::connect((self.origin.host.as_str(), self.origin.port)).await?;
+
+        let mut url = self.get_url("/stream/v1?auth=");
+        url.push_str(self.auth.as_ref().map(|x| x.as_str()).unwrap_or(""));
+
+        let key = handshake::generate_key();
 
         let req = Request::builder()
             .method(Method::GET)
-            .uri(&uri)
-            .header(HOST, "debug.test")
-            .header(CONNECTION, "Upgrade")
-            .header(UPGRADE, "websocket")
-            .header("sec-websocket-version", "13")
-            .header("sec-websocket-key", &key)
-            .body(Default::default())?;
+            .uri(url)
+            .header(header::HOST, &self.origin.host)
+            .header(header::UPGRADE, "websocket")
+            .header(header::CONNECTION, "upgrade")
+            .header("Sec-WebSocket-Key", key)
+            .header("Sec-WebSocket-Version", "13")
+            .body(Empty::<Bytes>::new())?;
 
-        let res = self.client.request(req).await?;
-        ensure!(
-            res.status() == StatusCode::SWITCHING_PROTOCOLS,
-            "Not upgrading websocket"
-        );
-
-        let accept_key = res
-            .headers()
-            .get("sec-websocket-accept")
-            .and_then(|x| x.to_str().ok());
-        ensure!(accept_key == Some(&accept), "Invalid websocket accept key");
-
-        let upgraded = hyper::upgrade::on(res).await?;
-        let upgraded = upgraded
-            .downcast::<TokioIo<TcpStream>>()
-            .unwrap()
-            .io
-            .into_inner();
-        //FIXME: Do not ignore read_buf
-        let stream = WebSocketStream::from_raw_socket(upgraded, Role::Client, None).await;
-
-        let (tx, rx) = stream.split();
-        Ok((NativeMessageSink(tx), NativeMessageStream(rx)))
+        let (ws, _) = handshake::client(&SpawnExecutor, req, stream).await?;
+        let ws = FragmentCollector::new(ws);
+        Ok(NativeMessageStream(ws.into()))
     }
 }
 
-pub struct NativeFetchResponse(hyper::Response<Incoming>);
+#[derive(Debug)]
+pub struct NativeFetchResponse(reqwest::Response);
 
-#[async_trait]
 impl FetchResponse for NativeFetchResponse {
     fn status(&self) -> StatusCode {
-        self.0.status()
+        //FIXME: Simplify this when reqwest uses hyper 1.0
+        StatusCode::from_u16(self.0.status().as_u16()).unwrap()
     }
 
-    async fn next(&mut self) -> Option<Result<Bytes>> {
-        self.0.body_mut().frame().await.and_then(|x| match x {
-            Ok(frame) => frame.data_ref().map(|b| Ok(b.clone())),
-            Err(e) => Some(Err(e.into())),
-        })
+    async fn next(&mut self) -> Result<Option<Bytes>> {
+        Ok(self.0.chunk().await?)
     }
-}
 
-pub struct NativeMessageSink(SplitSink<WebSocketStream<TcpStream>, Message>);
-
-#[async_trait]
-impl MessageSink for NativeMessageSink {
-    async fn send(&mut self, data: Bytes) -> Result<()> {
-        Ok(self.0.send(Message::Binary(data.into())).await?)
+    async fn body(self) -> Result<Bytes> {
+        Ok(self.0.bytes().await?)
     }
 }
 
-pub struct NativeMessageStream(SplitStream<WebSocketStream<TcpStream>>);
+pub struct NativeMessageStream(tokio::sync::Mutex<FragmentCollector<TokioIo<Upgraded>>>);
 
-#[async_trait]
 impl MessageStream for NativeMessageStream {
-    async fn recv(&mut self) -> Option<Result<Bytes>> {
+    async fn read(&self) -> Result<Option<Bytes>> {
+        let mut stream = self.0.lock().await;
+
         loop {
-            match self.0.next().await {
-                Some(x) => match x {
-                    Ok(msg) => {
-                        if let Message::Binary(data) = msg {
-                            return Some(Ok(data.into()));
-                        } else {
-                            error!("Received message of wrong type: {msg:?}");
-                        }
-                    }
-                    Err(e) => return Some(Err(e.into())),
+            let frame = match stream.read_frame().await {
+                Ok(x) => x,
+                Err(e) => match e {
+                    WebSocketError::ConnectionClosed => return Ok(None),
+                    WebSocketError::UnexpectedEOF => return Ok(None),
+                    _ => return Err(e.into()),
                 },
-                None => return None,
+            };
+
+            match frame.opcode {
+                OpCode::Binary => return Ok(Some(frame.payload.to_owned().into())),
+                OpCode::Close => return Ok(None),
+                OpCode::Ping | OpCode::Pong => {}
+                OpCode::Continuation => panic!("received continuation frame"),
+                unknown => {
+                    log::warn!("Ignoring unknown websocket message type: {:?}", unknown);
+                }
             }
         }
+    }
+
+    async fn write(&self, data: Bytes) -> Result<()> {
+        let mut stream = self.0.lock().await;
+        stream.write_frame(Frame::binary((*data).into())).await?;
+        Ok(())
+    }
+}
+
+impl Debug for NativeMessageStream {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("NativeMessageStream").finish()
+    }
+}
+
+struct SpawnExecutor;
+
+impl<Fut> hyper::rt::Executor<Fut> for SpawnExecutor
+where
+    Fut: Future + Send + 'static,
+    Fut::Output: Send + 'static,
+{
+    fn execute(&self, fut: Fut) {
+        tokio::task::spawn(fut);
     }
 }

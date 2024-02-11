@@ -18,7 +18,7 @@ use windows::Win32::Graphics::Direct3D11::*;
 use windows::Win32::Graphics::Dxgi::Common::*;
 use windows::Win32::Graphics::Dxgi::*;
 
-use super::{RefreshRate, Resolution};
+use crate::network::dto::video::{RefreshRate, Resolution};
 
 #[derive(Debug)]
 pub struct CaptureDxgi {
@@ -156,7 +156,7 @@ unsafe fn init_capture(stage: &CaptureDxgi) -> Result<Resources> {
     let factory = &stage.factory;
 
     unsafe {
-        let adapters = list_adapters(&factory)?;
+        let adapters = list_adapters(factory)?;
         ensure!(!adapters.is_empty(), "No D3D adapter found");
 
         // Select primary adapter

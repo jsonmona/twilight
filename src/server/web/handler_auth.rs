@@ -1,11 +1,8 @@
 use actix_web::{post, web, HttpResponse, Responder};
 use lazy_static::lazy_static;
 use regex::Regex;
-use serde::Serialize;
 
-use crate::server::web::Sessions;
-
-use super::SessionId;
+use crate::{network::dto::auth::AuthSuccessResponse, server::web::Sessions};
 
 pub fn handler_auth(cfg: &mut web::ServiceConfig) {
     cfg.service((auth_username,));
@@ -25,11 +22,6 @@ async fn auth_username(body: web::Bytes, sessions: web::Data<Sessions>) -> impl 
     let session = sessions.lock().create_session().unwrap();
 
     HttpResponse::Ok().json(AuthSuccessResponse {
-        token: session.sid().clone(),
+        token: session.sid().to_hex(),
     })
-}
-
-#[derive(Serialize)]
-struct AuthSuccessResponse {
-    token: SessionId,
 }

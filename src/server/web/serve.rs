@@ -23,7 +23,7 @@ pub async fn serve_web() -> Result<()> {
             .app_data(twilight_server.clone())
             .service(web::scope(base_path).configure(all_handlers))
     })
-    .bind(("127.0.0.1", 3000))?
+    .bind(("127.0.0.1", 1518))?
     .run()
     .await?;
 

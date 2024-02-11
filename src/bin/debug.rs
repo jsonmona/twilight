@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use tokio::runtime::Runtime;
 use tokio::task::LocalSet;
 use twilight::client::ClientLaunchArgs;
@@ -21,9 +23,7 @@ fn main() {
     twilight::viewer::launch(
         rt,
         ClientLaunchArgs {
-            host: "127.0.0.1".into(),
-            port: None,
-            cleartext: true,
+            url: FromStr::from_str("twilightc://localhost/twilight").unwrap(),
         },
     );
 }

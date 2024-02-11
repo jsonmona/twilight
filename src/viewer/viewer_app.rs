@@ -79,8 +79,12 @@ impl ViewerApp {
                     }
                 }
                 Event::UserEvent(kind) => match kind {
-                    TwilightClientEvent::Connected { width, height } => {
-                        info!("Connected to {width}x{height}");
+                    TwilightClientEvent::Connected(info) => {
+                        info!("Connected to {info:?}");
+
+                        let width = info.resolution.width;
+                        let height = info.resolution.height;
+
                         let state = display_state.as_mut().unwrap();
                         desktop_view = Some(DesktopView::new(state, width, height));
                     }

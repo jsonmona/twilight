@@ -1,19 +1,80 @@
-use anyhow::Result;
-use async_trait::async_trait;
+use std::fmt::Debug;
+use std::str::FromStr;
+
+use anyhow::{bail, Context, Result};
 use hyper::body::Bytes;
 use hyper::{Method, StatusCode};
+use url::Url;
 
-//TODO: Remove these async_trait when async_fn_in_traits stabilizes
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub struct Origin {
+    pub cleartext: bool,
+    pub host: String,
+    pub port: u16,
+    pub path: String,
+}
 
-#[async_trait]
-pub trait ServerConnection: Send {
+impl FromStr for Origin {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self> {
+        let url = Url::parse(s)?;
+
+        if !url.username().is_empty() || url.password().is_some() {
+            bail!("URL must not contain username or password");
+        }
+
+        if url.query().is_some() {
+            bail!("URL must not contain query");
+        }
+
+        if url.fragment().is_some() {
+            bail!("URL must not contain fragment");
+        }
+
+        let (cleartext, default_port) = match url.scheme() {
+            "" | "twilight" => (false, 1517),
+            "twilightc" => (true, 1518),
+            "http" => (true, 80),
+            "https" => (false, 443),
+            _ => bail!("URL contains unknown scheme"),
+        };
+
+        // Perhaps we should remove default path thing
+        let path = if s.ends_with("/") {
+            "/"
+        } else {
+            let path = url.path();
+            if path == "/" {
+                "/twilight"
+            } else {
+                path
+            }
+        };
+
+        Ok(Self {
+            cleartext,
+            host: url.host_str().context("URL must contain a host")?.into(),
+            port: url.port().unwrap_or(default_port).into(),
+            path: path.into(),
+        })
+    }
+}
+
+pub trait ServerConnection: Send + Debug {
     type FetchResponseImpl: FetchResponse;
-    type MessageSinkImpl: MessageSink;
     type MessageStreamImpl: MessageStream;
 
-    /// Target host. For example, "http://example.com" or "https://example.com:443" or even
-    /// "http+unix:///var/run/twilight.sock"
-    fn host(&self) -> &str;
+    async fn close(self);
+
+    /// Target origin.
+    fn origin(&self) -> &Origin;
+
+    /// Set authorization token
+    fn set_auth(&mut self, token: String);
+
+    /// Clear authorization token
+    fn clear_auth(&mut self);
 
     /// Fetch the given path.
     /// Caller must ensure compliance with the fetch API limitations of web browsers.
@@ -21,33 +82,28 @@ pub trait ServerConnection: Send {
         &mut self,
         method: Method,
         path: &str,
-        data: &[u8],
+        data: Bytes,
     ) -> Result<Self::FetchResponseImpl>;
 
-    /// Upgrade into websocket API.
-    async fn upgrade(
-        self,
-        version: i32,
-    ) -> Result<(Self::MessageSinkImpl, Self::MessageStreamImpl)>;
+    /// Connect to the streaming API
+    async fn stream(&mut self, version: i32) -> Result<Self::MessageStreamImpl>;
 }
 
-#[async_trait]
-pub trait FetchResponse: Send {
+pub trait FetchResponse: Send + Debug {
     /// Get status code of the response
     fn status(&self) -> StatusCode;
 
-    /// Read next bytes. None if eof.
-    async fn next(&mut self) -> Option<Result<Bytes>>;
+    /// Read next bytes. None if EOF.
+    async fn next(&mut self) -> Result<Option<Bytes>>;
+
+    /// Read all bytes. (maximum: 64MiB)
+    async fn body(self) -> Result<Bytes>;
 }
 
-#[async_trait]
-pub trait MessageSink: Send {
-    /// Send message via websocket
-    async fn send(&mut self, data: Bytes) -> Result<()>;
-}
-
-#[async_trait]
-pub trait MessageStream: Send {
+pub trait MessageStream: Send + Sync + Debug {
     /// Receive message via websocket
-    async fn recv(&mut self) -> Option<Result<Bytes>>;
+    async fn read(&self) -> Result<Option<Bytes>>;
+
+    /// Send message via websocket
+    async fn write(&self, data: Bytes) -> Result<()>;
 }

@@ -2,7 +2,8 @@ use crate::client::native_server_connection::NativeServerConnection;
 use crate::client::server_connection::{FetchResponse, MessageStream, ServerConnection};
 use crate::client::ClientLaunchArgs;
 use crate::image::{ColorFormat, ImageBuf};
-use crate::network::util::parse_msg;
+use crate::network::dto::auth::AuthSuccessResponse;
+use crate::network::dto::video::{DesktopInfo, MonitorInfo};
 use crate::schema::video::{Coord2f, Coord2u, NotifyVideoStart, VideoCodec, VideoFrame};
 use crate::util::AsUsize;
 use crate::util::{CursorShape, CursorState, DesktopUpdate};
@@ -12,12 +13,13 @@ use anyhow::{anyhow, bail, ensure, Context, Result};
 use hyper::body::Bytes;
 use hyper::Method;
 use std::rc::Rc;
+use std::sync::Arc;
 use tokio::sync::{mpsc, watch};
 use tokio::task::JoinHandle;
 
 #[derive(Debug)]
 pub enum TwilightClientEvent {
-    Connected { width: u32, height: u32 },
+    Connected(MonitorInfo),
     NextFrame(DesktopUpdate<ImageBuf>),
     Closed(Result<()>),
 }
@@ -34,15 +36,13 @@ impl TwilightClient {
     pub fn new(callback: EventCb, args: ClientLaunchArgs) -> Self {
         let (tx, rx) = watch::channel(false);
 
-        if !args.cleartext {
+        if !args.url.cleartext {
             panic!("Only cleartext transport is supported for now");
         }
-
-        let host = args.host.clone();
-        let port = args.port();
+        let origin = args.url.clone();
 
         let worker = tokio::task::spawn_local(async move {
-            let result = match NativeServerConnection::new(&host, port).await {
+            let result = match NativeServerConnection::new(origin).await {
                 Ok(c) => worker(c, rx, Rc::clone(&callback)).await,
                 Err(e) => Err(e),
             };
@@ -87,12 +87,12 @@ fn decoder_pipeline(
     (data_tx, img_rx)
 }
 
-async fn worker<Conn: ServerConnection>(
-    mut conn: Conn,
+async fn worker(
+    mut conn: impl ServerConnection,
     mut shutdown: watch::Receiver<bool>,
     callback: EventCb,
 ) -> Result<()> {
-    let res = conn.fetch(Method::POST, "/auth?type=username", b"testuser");
+    let res = conn.fetch(Method::POST, "/auth/username", b"testuser"[..].into());
 
     let res = tokio::select! {
         biased;
@@ -101,32 +101,42 @@ async fn worker<Conn: ServerConnection>(
     }?;
 
     if !res.status().is_success() {
-        bail!("unable to authenticate: status={}", res.status());
+        return Err(anyhow!("Auth status is not ok ({})", res.status().as_u16()));
     }
 
-    let (_sink, mut rx) = conn.upgrade(1).await?;
+    let res = res.body().await?;
+    let res: AuthSuccessResponse = serde_json::from_slice(&res)?;
 
-    let msg = tokio::select! {
+    conn.set_auth(res.token);
+
+    let res = conn.fetch(Method::GET, "/capture/desktop", Bytes::new());
+
+    let res = tokio::select! {
         biased;
         _ = shutdown.changed() => return Ok(()),
-        x = rx.recv() => x,
-    };
+        x = res => x
+    }?;
 
-    let msg = match msg {
-        Some(x) => x?,
-        None => bail!("resolution not received"),
-    };
+    if !res.status().is_success() {
+        return Err(anyhow!(
+            "Capture list status is not ok ({})",
+            res.status().as_u16()
+        ));
+    }
 
-    let stream = u16::from_le_bytes((&msg[..2]).try_into().unwrap());
-    assert_eq!(stream, 0);
+    let res = res.body().await?;
+    let res: DesktopInfo = serde_json::from_slice(&res)?;
 
-    let start: NotifyVideoStart = parse_msg(&msg[2..])?;
-    let desktop_codec = start.desktop_codec();
-    let resolution = start
-        .resolution()
-        .cloned()
-        .context("resolution not present")?;
+    if res.monitor.is_empty() {
+        return Err(anyhow!("No monitor available in server!"));
+    }
 
+    let monitor = &res.monitor[0];
+    log::info!("Connecting to monitor {:?}", monitor);
+
+    panic!("Not implemented");
+
+    /*
     callback(TwilightClientEvent::Connected {
         width: resolution.width(),
         height: resolution.height(),
@@ -215,6 +225,7 @@ async fn worker<Conn: ServerConnection>(
 
     drop(data_tx);
     decoder.await?;
+    */
 
     Ok(())
 }

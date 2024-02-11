@@ -1,12 +1,13 @@
-use crate::util::DesktopUpdate;
-use crate::video::encoder::jpeg::JpegEncoder;
-use crate::video::encoder::EncoderStage;
-
 use anyhow::Result;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
-use super::capture::{CaptureFactoryWin32, Resolution};
+use super::capture::CaptureFactoryWin32;
+
+use crate::network::dto::video::Resolution;
+use crate::util::DesktopUpdate;
+use crate::video::encoder::jpeg::JpegEncoder;
+use crate::video::encoder::EncoderStage;
 
 pub type CapturePipelineOutput = (Resolution, mpsc::Receiver<DesktopUpdate<Vec<u8>>>);
 
