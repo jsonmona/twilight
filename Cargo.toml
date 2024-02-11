@@ -22,16 +22,11 @@ cfg-if = "1.0.0"
 clap = { version = "4.2.1", features = ["derive"] }
 cookie = "0.18.0"
 env_logger = "0.11.0"
+fastwebsockets = "0.6.0"
 flatbuffers = "23.1.21"
 futures-util = "0.3.26"
 http-body-util = "0.1.0"
-hyper = { version = "1.0.0", features = ["http1", "server", "client"] }
-hyper-tungstenite = "0.13.0"
-hyper-util = { version = "0.1.1", features = [
-    "server-auto",
-    "client-legacy",
-    "http1",
-] }
+hyper = { version = "1.0.0", features = ["http1"] }
 jpeg-encoder = { version = "0.6.0", features = ["simd"] }
 lazy_static = "1.4.0"
 log = "0.4.17"
@@ -49,12 +44,8 @@ smallvec = { version = "1.13.1", features = [
 ] }
 thiserror = "1.0.38"
 tokio = { version = "1.25.0", features = ["full"] }
-tokio-tungstenite = "0.21.0"
-tungstenite = "0.21.0"
-ultraviolet = { version = "0.9.0", features = ["int", "bytemuck"] }
 url = "2.3.1"
 wgpu = "0.19.0"
-wide = "0.7.8"
 winit = "0.29.10"
 zune-jpeg = "0.4.11"
 
@@ -76,9 +67,5 @@ features = [
     "Win32_UI_HiDpi",
 ]
 
-[dev-dependencies]
-criterion = { version = "0.4", features = ["html_reports"] }
-rand_xoshiro = "0.6.0"
-
-[profile.dev]
-opt-level = 1
+[profile.dev.package."*"]
+opt-level = 2
