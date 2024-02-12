@@ -15,8 +15,8 @@ including any off-the-shelf HTTP proxy like nginx.
 ### Connection
 If no scheme is given, it defaults to HTTPS through port 1517.
 
-If scheme `twilight` or `twilights` ('s' for TLS) is given, the default port is
-1518 and 1517 respectively.
+If scheme `twilight` or `twilightc` ('c' for cleartext) is given, the
+default port is 1517 and 1518 respectively.
 
 If scheme either `http` or `https` is given, the default port is 80 and 443
 respectively.
