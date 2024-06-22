@@ -5,6 +5,7 @@ mod micros;
 mod nonsend;
 mod performance_monitor;
 mod spawn_thread_asyncify;
+mod thread_manager;
 mod timer;
 mod unwrapped_refmut;
 
@@ -15,5 +16,6 @@ pub use micros::Micros;
 pub use nonsend::NonSend;
 pub use performance_monitor::{PerformanceMonitor, PerformanceStats};
 pub use spawn_thread_asyncify::spawn_thread_asyncify;
+pub use thread_manager::ThreadManager;
 pub use timer::Timer;
 pub use unwrapped_refmut::UnwrappedRefMut;

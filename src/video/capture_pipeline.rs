@@ -14,7 +14,7 @@ pub type CapturePipelineOutput = (Resolution, mpsc::Receiver<DesktopUpdate<Vec<u
 pub fn capture_pipeline() -> Result<CapturePipelineOutput> {
     let mut capture_factory = CaptureFactoryWin32::new()?;
 
-    let capture = capture_factory.start("", "")?;
+    let capture = capture_factory.start("dxgi", "")?;
     let encode: Arc<dyn EncoderStage> = JpegEncoder::new(false)?;
 
     capture.set_next_stage(Arc::clone(&encode))?;

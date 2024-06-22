@@ -7,10 +7,7 @@ use std::{
     sync::{Arc, Weak},
 };
 
-use crate::{
-    network::dto::video::MonitorInfo, schema::video::*, util::DesktopUpdate,
-    video::capture_pipeline,
-};
+use crate::{schema::video::*, util::DesktopUpdate, video::capture_pipeline};
 
 use super::Channel;
 
@@ -37,14 +34,11 @@ impl TwilightServer {
         println!("unexpected message received from {msg:?}");
     }
 
-    pub fn subscribe_desktop(&mut self, monitor: &str) -> Result<Arc<Channel>> {
-        let channel = self.create_channel();
-
+    pub fn subscribe_desktop(&mut self, monitor: &str, channel: Arc<Channel>) -> Result<()> {
         println!("subscribe to desktop on monitor {monitor}");
 
         let (_, mut output) = capture_pipeline()?;
 
-        let ch = Arc::clone(&channel);
         tokio::spawn(async move {
             let mut builder = FlatBufferBuilder::with_capacity(8192);
 
@@ -54,24 +48,20 @@ impl TwilightServer {
                     None => break,
                 };
 
-                //FIXME: needs some locking mechanism to prevent messages interleaving
-
-                match send_desktop_update(&ch, &mut builder, &update).await {
+                match send_desktop_update(&channel, &mut builder, &update).await {
                     Ok(_) => {}
                     Err(e) => {
                         log::error!("unexpected error whild sending message: {}", e);
                         break;
                     }
                 }
-
-                ch.send_bytes(update.desktop.into()).await;
             }
         });
 
-        Ok(channel)
+        Ok(())
     }
 
-    fn create_channel(&mut self) -> Arc<Channel> {
+    pub fn create_channel(&mut self) -> Arc<Channel> {
         for _ in 0..(u16::MAX as u32) {
             let ch = self.next_channel;
             self.next_channel = ch.wrapping_add(1);
@@ -112,7 +102,7 @@ async fn send_desktop_update(
     builder: &mut FlatBufferBuilder<'_>,
     update: &DesktopUpdate<Vec<u8>>,
 ) -> Result<()> {
-    ch.send_msg_with(builder, |builder| {
+    ch.send_msg_payload_with(builder, &update.desktop, |builder| {
         let cursor_update = update.cursor.as_ref().map(|cursor| {
             let shape = cursor.shape.as_ref().map(|shape| {
                 let image = builder.create_vector(&shape.image.data);

@@ -3,7 +3,6 @@ use crate::util::DesktopUpdate;
 use crate::viewer::display_state::DisplayState;
 use bytemuck::{Pod, Zeroable};
 use std::convert::Infallible;
-use std::num::NonZeroU32;
 use wgpu::util::DeviceExt;
 use wgpu::{BindGroup, Buffer, Texture};
 

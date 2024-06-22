@@ -1,8 +1,9 @@
+use std::sync::Arc;
+
 use actix_web::{get, post, web, HttpResponse, Responder};
-use serde::Serialize;
 
 use crate::{
-    network::dto::video::{ChannelCreation, DesktopInfo, MonitorInfo, RefreshRate, Resolution},
+    network::dto::video::{DesktopInfo, MonitorInfo, RefreshRate, Resolution, StartCapture},
     server::{web::SessionGuard, SharedTwilightServer},
 };
 
@@ -20,8 +21,8 @@ async fn capture_desktop_get(
             id: "dummy".into(),
             name: "dummy monitor".into(),
             resolution: Resolution {
-                height: 1920,
-                width: 1080,
+                height: 1080,
+                width: 1920,
             },
             refresh_rate: RefreshRate { den: 60, num: 1 },
         }]
@@ -34,6 +35,7 @@ async fn capture_desktop_get(
 async fn capture_desktop_post(
     session: SessionGuard,
     server: web::Data<SharedTwilightServer>,
+    body: web::Json<StartCapture>,
 ) -> impl Responder {
     let stream = match session.stream() {
         Some(x) => x,
@@ -42,8 +44,26 @@ async fn capture_desktop_post(
         }
     };
 
-    let channel = server.write().subscribe_desktop("dummy").unwrap();
+    let channel = match session.get_channel(body.ch) {
+        Some(x) => x,
+        None => {
+            return HttpResponse::FailedDependency().finish();
+        }
+    };
+
+    match server
+        .write()
+        .subscribe_desktop(&body.id, Arc::clone(&channel))
+    {
+        Ok(_) => {}
+        Err(e) => {
+            //FIXME: What should i do?
+            log::error!("What should i do?\n{e:?}");
+            return HttpResponse::InternalServerError().finish();
+        }
+    }
+
     channel.add_client(stream);
 
-    HttpResponse::Ok().json(ChannelCreation { ch: channel.ch })
+    HttpResponse::Ok().finish()
 }

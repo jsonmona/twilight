@@ -11,6 +11,9 @@ use actix_web::{web, FromRequest, HttpResponse, ResponseError};
 use anyhow::{anyhow, Result};
 use parking_lot::{Mutex, RwLock};
 use rand::thread_rng;
+use rustc_hash::FxHashMap;
+
+use crate::server::{Channel, TwilightServer};
 
 use super::{SessionId, WebsocketActor};
 
@@ -26,6 +29,7 @@ pub struct SessionStorage {
 
 pub struct WebSession {
     sid: SessionId,
+    channels: RwLock<FxHashMap<u16, Arc<Channel>>>,
     stream: RwLock<Option<WeakAddr<WebsocketActor>>>,
     last_used: Mutex<Instant>,
 }
@@ -59,6 +63,7 @@ impl SessionStorage {
         let now = Instant::now();
         let session = Arc::new(WebSession {
             sid: sid.clone(),
+            channels: Default::default(),
             stream: RwLock::new(None),
             last_used: Mutex::new(now),
         });
@@ -170,6 +175,22 @@ impl WebSession {
 
         *stream = None;
         Ok(())
+    }
+
+    pub fn create_channel(&self, server: &mut TwilightServer) -> Arc<Channel> {
+        let channel = server.create_channel();
+        self.channels
+            .write()
+            .insert(channel.ch, Arc::clone(&channel));
+        channel
+    }
+
+    pub fn get_channel(&self, ch: u16) -> Option<Arc<Channel>> {
+        self.channels.read().get(&ch).map(|x| Arc::clone(x))
+    }
+
+    pub fn close_channel(&self, ch: u16) {
+        self.channels.write().remove(&ch);
     }
 }
 

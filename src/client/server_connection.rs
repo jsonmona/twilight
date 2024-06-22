@@ -61,9 +61,11 @@ impl FromStr for Origin {
     }
 }
 
+#[allow(unused)]
 pub trait ServerConnection: Send + Debug {
     type FetchResponseImpl: FetchResponse;
-    type MessageStreamImpl: MessageStream;
+    type MessageReadImpl: MessageRead;
+    type MessageWriteImpl: MessageWrite;
 
     async fn close(self);
 
@@ -72,9 +74,6 @@ pub trait ServerConnection: Send + Debug {
 
     /// Set authorization token
     fn set_auth(&mut self, token: String);
-
-    /// Clear authorization token
-    fn clear_auth(&mut self);
 
     /// Fetch the given path.
     /// Caller must ensure compliance with the fetch API limitations of web browsers.
@@ -85,10 +84,14 @@ pub trait ServerConnection: Send + Debug {
         data: Bytes,
     ) -> Result<Self::FetchResponseImpl>;
 
-    /// Connect to the streaming API
-    async fn stream(&mut self, version: i32) -> Result<Self::MessageStreamImpl>;
+    /// Connect to the streaming API (read-only)
+    async fn stream_read(&mut self, channel: u16) -> Result<Self::MessageReadImpl>;
+
+    /// Connect to the streaming API (write-only)
+    async fn stream_write(&mut self, channel: u16) -> Result<Self::MessageWriteImpl>;
 }
 
+#[allow(unused)]
 pub trait FetchResponse: Send + Debug {
     /// Get status code of the response
     fn status(&self) -> StatusCode;
@@ -100,10 +103,22 @@ pub trait FetchResponse: Send + Debug {
     async fn body(self) -> Result<Bytes>;
 }
 
-pub trait MessageStream: Send + Sync + Debug {
+#[allow(unused)]
+pub trait MessageRead: Send + Sync + Debug + 'static {
+    fn is_open(&self) -> bool;
+
+    fn channel(&self) -> u16;
+
     /// Receive message via websocket
-    async fn read(&self) -> Result<Option<Bytes>>;
+    async fn read(&mut self) -> Result<Option<Bytes>>;
+}
+
+#[allow(unused)]
+pub trait MessageWrite: Send + Sync + Debug + 'static {
+    fn is_open(&self) -> bool;
+
+    fn channel(&self) -> u16;
 
     /// Send message via websocket
-    async fn write(&self, data: Bytes) -> Result<()>;
+    async fn write(&mut self, data: Bytes) -> Result<()>;
 }

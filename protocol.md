@@ -83,7 +83,17 @@ Endpoints described here needs the authorization header,
 or they will return 403 Forbidden.
 
 ---
-`POST /channel/{ch}/stop`
+`PUT /channel`
+Create a new channel.
+
+Example:
+```json
+{
+    "ch": 1
+}
+```
+
+`DELETE /channel/{ch}`
 Stops listening on the specified channel.
 
 ---
@@ -114,17 +124,12 @@ Generates status code `424 Failed Dependency` if stream is not open.
 Example request:
 ```json
 {
+    "ch": 1,
     "id": "(opaque handle)"
 }
 ```
 
-Example response:
-```json
-{
-    /// The channel that the data is sent on.
-    "ch": 1,
-}
-```
+No response body.
 
 ---
 `GET /stream/v1?auth={token}`

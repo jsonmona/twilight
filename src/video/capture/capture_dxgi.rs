@@ -130,7 +130,7 @@ fn capture_loop(stage: Arc<CaptureDxgi>) -> Result<()> {
 
         let mut is_first = true;
 
-        while stage.shutdown.load(Ordering::Relaxed) {
+        while !stage.shutdown.load(Ordering::Relaxed) {
             if let Some(update) = next_img(&mut res, is_first)? {
                 let update = update.and_then_desktop(|tex| download_image(&mut res, &tex))?;
 

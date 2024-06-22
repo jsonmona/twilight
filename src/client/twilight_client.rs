@@ -1,19 +1,20 @@
 use crate::client::native_server_connection::NativeServerConnection;
-use crate::client::server_connection::{FetchResponse, MessageStream, ServerConnection};
+use crate::client::server_connection::{FetchResponse, MessageRead, ServerConnection};
 use crate::client::ClientLaunchArgs;
 use crate::image::{ColorFormat, ImageBuf};
 use crate::network::dto::auth::AuthSuccessResponse;
-use crate::network::dto::video::{DesktopInfo, MonitorInfo};
-use crate::schema::video::{Coord2f, Coord2u, NotifyVideoStart, VideoCodec, VideoFrame};
-use crate::util::AsUsize;
+use crate::network::dto::channel::OpenChannelResponse;
+use crate::network::dto::video::{DesktopInfo, MonitorInfo, StartCapture};
+use crate::schema::video::{Coord2f, Coord2u, VideoCodec, VideoFrame};
+use crate::schema::{parse_msg, parse_msg_payload};
+use crate::util::ThreadManager;
 use crate::util::{CursorShape, CursorState, DesktopUpdate};
 use crate::video::decoder::jpeg::JpegDecoder;
 use crate::video::decoder::DecoderStage;
-use anyhow::{anyhow, bail, ensure, Context, Result};
+use anyhow::{anyhow, Result};
 use hyper::body::Bytes;
 use hyper::Method;
 use std::rc::Rc;
-use std::sync::Arc;
 use tokio::sync::{mpsc, watch};
 use tokio::task::JoinHandle;
 
@@ -64,6 +65,7 @@ fn decoder_pipeline(
     w: u32,
     h: u32,
     codec: VideoCodec,
+    thread_manager: &mut ThreadManager,
 ) -> (
     mpsc::Sender<DesktopUpdate<Bytes>>,
     mpsc::Receiver<DesktopUpdate<ImageBuf>>,
@@ -73,16 +75,18 @@ fn decoder_pipeline(
     let (data_tx, mut data_rx) = mpsc::channel::<DesktopUpdate<Bytes>>(1);
     let (img_tx, img_rx) = mpsc::channel(1);
 
-    std::thread::spawn(move || -> Result<()> {
-        let mut decoder = JpegDecoder::new(w, h)?;
-        while let Some(update) = data_rx.blocking_recv() {
-            let update = update.and_then_desktop(|x| decoder.decode(&x))?;
-            img_tx
-                .blocking_send(update)
-                .map_err(|_| anyhow!("img_rx closed"))?;
-        }
-        Ok(())
-    });
+    thread_manager
+        .spawn_named("decoder_pipeline", move || {
+            let mut decoder = JpegDecoder::new(w, h)?;
+            while let Some(update) = data_rx.blocking_recv() {
+                let update = update.and_then_desktop(|x| decoder.decode(&x))?;
+                img_tx
+                    .blocking_send(update)
+                    .map_err(|_| anyhow!("img_rx closed"))?;
+            }
+            Ok(())
+        })
+        .unwrap();
 
     (data_tx, img_rx)
 }
@@ -92,6 +96,8 @@ async fn worker(
     mut shutdown: watch::Receiver<bool>,
     callback: EventCb,
 ) -> Result<()> {
+    let mut thread_manager = ThreadManager::new();
+
     let res = conn.fetch(Method::POST, "/auth/username", b"testuser"[..].into());
 
     let res = tokio::select! {
@@ -134,23 +140,42 @@ async fn worker(
     let monitor = &res.monitor[0];
     log::info!("Connecting to monitor {:?}", monitor);
 
-    panic!("Not implemented");
+    let ch = open_channel(&mut conn).await?;
+    log::info!("Using channel {ch}");
+    let mut stream = conn.stream_read(ch).await?;
 
-    /*
-    callback(TwilightClientEvent::Connected {
-        width: resolution.width(),
-        height: resolution.height(),
-    });
+    let payload = serde_json::to_string(&StartCapture {
+        ch,
+        id: monitor.id.clone(),
+    })?;
 
-    let (data_tx, mut img_rx) =
-        decoder_pipeline(resolution.width(), resolution.height(), desktop_codec);
+    let res = conn
+        .fetch(Method::POST, "/capture/desktop", payload.into())
+        .await?;
+
+    if !res.status().is_success() {
+        let status = res.status().as_u16();
+        let body = res.body().await.unwrap();
+        return Err(anyhow!(
+            "failed to start desktop capture (status={}) {:?}",
+            status,
+            body
+        ));
+    }
+
+    let width = monitor.resolution.width;
+    let height = monitor.resolution.height;
+    let desktop_codec = VideoCodec::Jpeg;
+    callback(TwilightClientEvent::Connected(monitor.clone()));
+
+    let (data_tx, mut img_rx) = decoder_pipeline(width, height, desktop_codec, &mut thread_manager);
 
     let callback_inner = Rc::clone(&callback);
     let decoder = tokio::task::spawn_local(async move {
         let callback = callback_inner;
 
         while let Some(img) = img_rx.recv().await {
-            callback(TwilightClientEvent::NextFrame(img))
+            callback(TwilightClientEvent::NextFrame(img));
         }
     });
 
@@ -158,35 +183,17 @@ async fn worker(
         let msg = tokio::select! {
             biased;
             _ = shutdown.changed() => break,
-            x = rx.recv() => x,
-        };
+            x = stream.read() => x,
+        }?;
 
         // None => normal close
         let msg = match msg {
-            Some(x) => x?,
+            Some(x) => x,
             None => break,
         };
 
-        let stream = u16::from_le_bytes((&msg[..2]).try_into().unwrap());
-        assert_eq!(stream, 1);
-
-        let frame: VideoFrame = parse_msg(&msg[2..])?;
-
-        let payload = tokio::select! {
-            biased;
-            _ = shutdown.changed() => break,
-            x = rx.recv() => x,
-        };
-
-        let payload: Bytes = match payload {
-            Some(x) => x?,
-            None => break,
-        };
-
-        ensure!(
-            payload.len() == frame.video_bytes().as_usize(),
-            "Video frame length does not match"
-        );
+        let frame: VideoFrame = parse_msg(&msg)?;
+        let payload = parse_msg_payload(&msg);
 
         let update = DesktopUpdate {
             cursor: frame.cursor_update().map(|x| {
@@ -225,7 +232,24 @@ async fn worker(
 
     drop(data_tx);
     decoder.await?;
-    */
+
+    thread_manager.join_all();
 
     Ok(())
+}
+
+async fn open_channel(conn: &mut impl ServerConnection) -> Result<u16> {
+    let res = conn.fetch(Method::PUT, "/channel", Bytes::new()).await?;
+
+    if !res.status().is_success() {
+        return Err(anyhow!(
+            "failed to open channel (status={})",
+            res.status().as_u16()
+        ));
+    }
+
+    let res = res.body().await?;
+    let res: OpenChannelResponse = serde_json::from_slice(&res)?;
+
+    Ok(res.ch)
 }

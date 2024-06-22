@@ -26,6 +26,7 @@ pub struct Resolution {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct ChannelCreation {
+pub struct StartCapture {
     pub ch: u16,
+    pub id: String,
 }

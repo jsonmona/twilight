@@ -7,8 +7,8 @@ use anyhow::Result;
 use crate::server::TwilightServer;
 
 use super::{
-    handler_auth::handler_auth, handler_capture::handler_capture, handler_stream::handler_stream,
-    SessionStorage,
+    handler_auth::handler_auth, handler_capture::handler_capture, handler_channel::handler_channel,
+    handler_stream::handler_stream, SessionStorage,
 };
 
 pub async fn serve_web() -> Result<()> {
@@ -32,6 +32,7 @@ pub async fn serve_web() -> Result<()> {
 
 fn all_handlers(config: &mut ServiceConfig) {
     config.configure(handler_auth);
-    config.configure(handler_stream);
     config.configure(handler_capture);
+    config.configure(handler_channel);
+    config.configure(handler_stream);
 }

@@ -1,5 +1,6 @@
 mod handler_auth;
 mod handler_capture;
+mod handler_channel;
 mod handler_stream;
 mod serve;
 mod session_id;

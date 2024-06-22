@@ -1,22 +1,28 @@
-use std::fmt::Debug;
 use std::str::FromStr;
+use std::{fmt::Debug, sync::Arc};
 
 use anyhow::Result;
 use bytes::Bytes;
-use fastwebsockets::{handshake, FragmentCollector, Frame, OpCode, WebSocketError};
+use fastwebsockets::{handshake, FragmentCollectorRead, Frame, OpCode, Payload};
 use futures_util::Future;
 use http_body_util::Empty;
-use hyper::{header, upgrade::Upgraded, Method, Request, StatusCode};
-use hyper_util::rt::TokioIo;
+use hyper::{header, Method, Request, StatusCode};
+use parking_lot::RwLock;
+use rustc_hash::FxHashMap;
 use tokio::net::TcpStream;
+use tokio::sync::mpsc::error::TrySendError;
 
-use crate::client::server_connection::{FetchResponse, MessageStream, Origin, ServerConnection};
+use crate::client::server_connection::{FetchResponse, MessageRead, Origin, ServerConnection};
+
+use super::server_connection::MessageWrite;
 
 #[derive(Debug)]
 pub struct NativeServerConnection {
     origin: Origin,
     auth: Option<String>,
     client: reqwest::Client,
+    stream_read: Arc<RwLock<FxHashMap<u16, tokio::sync::mpsc::Sender<Bytes>>>>,
+    stream_write: Option<Arc<tokio::sync::mpsc::Sender<Frame<'static>>>>,
 }
 
 impl NativeServerConnection {
@@ -27,6 +33,8 @@ impl NativeServerConnection {
             origin,
             auth: Default::default(),
             client: client.build()?,
+            stream_read: Arc::new(RwLock::new(Default::default())),
+            stream_write: None,
         })
     }
 
@@ -44,7 +52,8 @@ impl NativeServerConnection {
 
 impl ServerConnection for NativeServerConnection {
     type FetchResponseImpl = NativeFetchResponse;
-    type MessageStreamImpl = NativeMessageStream;
+    type MessageReadImpl = NativeMessageRead;
+    type MessageWriteImpl = NativeMessageWrite;
 
     async fn close(self) {}
 
@@ -54,10 +63,6 @@ impl ServerConnection for NativeServerConnection {
 
     fn set_auth(&mut self, token: String) {
         self.auth = Some(token);
-    }
-
-    fn clear_auth(&mut self) {
-        self.auth = None;
     }
 
     async fn fetch(
@@ -71,7 +76,11 @@ impl ServerConnection for NativeServerConnection {
         // FIXME: Remove this when reqwest updates to use hyper 1.0
         let method = reqwest::Method::from_str(method.as_str()).unwrap();
 
-        let builder = self.client.request(method, url).body(data);
+        let builder = self
+            .client
+            .request(method, url)
+            .body(data)
+            .header(reqwest::header::CONTENT_TYPE, "application/json");
 
         // attach bearer token if available
         let builder = if let Some(bearer) = self.auth.as_ref() {
@@ -83,9 +92,41 @@ impl ServerConnection for NativeServerConnection {
         Ok(NativeFetchResponse(builder.send().await?))
     }
 
-    async fn stream(&mut self, version: i32) -> Result<NativeMessageStream> {
-        assert_eq!(version, 1);
+    async fn stream_read(&mut self, channel: u16) -> Result<NativeMessageRead> {
+        if self.stream_write.is_none() {
+            self.open_conn().await?;
+        }
 
+        //TODO: Vary bound by channel type
+        let (tx, rx) = tokio::sync::mpsc::channel(64);
+
+        let mut target = self.stream_read.write();
+        target.insert(channel, tx);
+        std::mem::drop(target);
+
+        Ok(NativeMessageRead {
+            ch: channel,
+            is_open: true,
+            stream: rx,
+        })
+    }
+
+    async fn stream_write(&mut self, channel: u16) -> Result<NativeMessageWrite> {
+        if self.stream_write.is_none() {
+            self.open_conn().await?;
+        }
+
+        let stream = Arc::clone(self.stream_write.as_ref().expect("created above"));
+
+        Ok(NativeMessageWrite {
+            ch: channel,
+            stream,
+        })
+    }
+}
+
+impl NativeServerConnection {
+    async fn open_conn(&mut self) -> Result<()> {
         let stream = TcpStream::connect((self.origin.host.as_str(), self.origin.port)).await?;
 
         let mut url = self.get_url("/stream/v1?auth=");
@@ -103,9 +144,86 @@ impl ServerConnection for NativeServerConnection {
             .header("Sec-WebSocket-Version", "13")
             .body(Empty::<Bytes>::new())?;
 
-        let (ws, _) = handshake::client(&SpawnExecutor, req, stream).await?;
-        let ws = FragmentCollector::new(ws);
-        Ok(NativeMessageStream(ws.into()))
+        let (mut ws, _) = handshake::client(&SpawnExecutor, req, stream).await?;
+
+        // Copied from https://github.com/denoland/fastwebsockets/issues/76
+        ws.set_auto_pong(false);
+        ws.set_auto_close(false);
+
+        let (rx, mut tx) = ws.split(tokio::io::split);
+        let mut rx = FragmentCollectorRead::new(rx);
+
+        let (msg_send_tx, mut msg_send_rx) = tokio::sync::mpsc::channel(16);
+        let msg_send_tx = Arc::new(msg_send_tx);
+
+        self.stream_write = Some(Arc::clone(&msg_send_tx));
+
+        let receiver_inner = Arc::clone(&self.stream_read);
+
+        tokio::task::spawn(async move {
+            loop {
+                let frame = match rx.read_frame(&mut |f| msg_send_tx.send(f)).await {
+                    Ok(x) => x,
+                    Err(e) => {
+                        panic!("{:?}", e);
+                    }
+                };
+
+                match frame.opcode {
+                    OpCode::Ping => {
+                        msg_send_tx.send(Frame::pong(frame.payload)).await.unwrap();
+                    }
+                    OpCode::Binary => {
+                        if frame.payload.len() < 2 {
+                            log::warn!("Ignoring too short message (len={})", frame.payload.len());
+                            continue;
+                        }
+
+                        let ch = u16::from_le_bytes(
+                            frame.payload[..2].try_into().expect("checked above"),
+                        );
+
+                        let payload = match frame.payload {
+                            Payload::BorrowedMut(x) => Bytes::from(&x[2..]),
+                            Payload::Borrowed(x) => Bytes::from(&x[2..]),
+                            Payload::Owned(x) => Bytes::from(x).slice(2..),
+                            Payload::Bytes(x) => Bytes::from(x).slice(2..),
+                        };
+
+                        let target = receiver_inner.read();
+                        let tx = match target.get(&ch) {
+                            Some(x) => x,
+                            None => {
+                                log::warn!("Ignoring message for non-existing channel {ch}");
+                                continue;
+                            }
+                        };
+
+                        if let Err(e) = tx.try_send(payload) {
+                            if let TrySendError::Full(_) = e {
+                                log::error!("Removing channel {ch} because buffer is full");
+                            }
+
+                            // Receiver is dead or unresponsive. Remove the channel.
+                            std::mem::drop(target);
+                            receiver_inner.write().remove(&ch);
+                        }
+                    }
+                    OpCode::Close => {
+                        panic!("STUB: needs to close connection");
+                    }
+                    _ => { /* ignore */ }
+                }
+            }
+        });
+
+        tokio::task::spawn(async move {
+            while let Some(frame) = msg_send_rx.recv().await {
+                tx.write_frame(frame).await.unwrap();
+            }
+        });
+
+        Ok(())
     }
 }
 
@@ -127,44 +245,65 @@ impl FetchResponse for NativeFetchResponse {
     }
 }
 
-pub struct NativeMessageStream(tokio::sync::Mutex<FragmentCollector<TokioIo<Upgraded>>>);
+pub struct NativeMessageRead {
+    ch: u16,
+    is_open: bool,
+    stream: tokio::sync::mpsc::Receiver<Bytes>,
+}
 
-impl MessageStream for NativeMessageStream {
-    async fn read(&self) -> Result<Option<Bytes>> {
-        let mut stream = self.0.lock().await;
-
-        loop {
-            let frame = match stream.read_frame().await {
-                Ok(x) => x,
-                Err(e) => match e {
-                    WebSocketError::ConnectionClosed => return Ok(None),
-                    WebSocketError::UnexpectedEOF => return Ok(None),
-                    _ => return Err(e.into()),
-                },
-            };
-
-            match frame.opcode {
-                OpCode::Binary => return Ok(Some(frame.payload.to_owned().into())),
-                OpCode::Close => return Ok(None),
-                OpCode::Ping | OpCode::Pong => {}
-                OpCode::Continuation => panic!("received continuation frame"),
-                unknown => {
-                    log::warn!("Ignoring unknown websocket message type: {:?}", unknown);
-                }
-            }
-        }
+impl MessageRead for NativeMessageRead {
+    fn is_open(&self) -> bool {
+        self.is_open
     }
 
-    async fn write(&self, data: Bytes) -> Result<()> {
-        let mut stream = self.0.lock().await;
-        stream.write_frame(Frame::binary((*data).into())).await?;
+    fn channel(&self) -> u16 {
+        self.ch
+    }
+
+    async fn read(&mut self) -> Result<Option<Bytes>> {
+        let data = self.stream.recv().await;
+        if data.is_none() {
+            self.is_open = false;
+        }
+
+        Ok(data)
+    }
+}
+
+impl Debug for NativeMessageRead {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("NativeMessageRead").finish()
+    }
+}
+
+pub struct NativeMessageWrite {
+    ch: u16,
+    stream: Arc<tokio::sync::mpsc::Sender<Frame<'static>>>,
+}
+
+impl MessageWrite for NativeMessageWrite {
+    fn is_open(&self) -> bool {
+        !self.stream.is_closed()
+    }
+
+    fn channel(&self) -> u16 {
+        self.ch
+    }
+
+    async fn write(&mut self, data: Bytes) -> Result<()> {
+        let mut buf = Vec::with_capacity(2 + data.len());
+        buf.extend_from_slice(&self.ch.to_le_bytes());
+        buf.extend_from_slice(&data);
+
+        self.stream.send(Frame::binary(Payload::Owned(buf))).await?;
+
         Ok(())
     }
 }
 
-impl Debug for NativeMessageStream {
+impl Debug for NativeMessageWrite {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("NativeMessageStream").finish()
+        f.debug_tuple("NativeMessageWrite").finish()
     }
 }
 

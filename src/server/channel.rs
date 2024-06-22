@@ -27,7 +27,7 @@ impl Channel {
         self.clients.write().push(addr);
     }
 
-    pub async fn send_bytes(&self, msg: Bytes) {
+    async fn send_bytes(&self, msg: Bytes) {
         let mut futures = FuturesUnordered::new();
 
         for client in self.clients.read().iter() {
@@ -50,13 +50,34 @@ impl Channel {
         builder.reset();
 
         let msg = f(builder);
-        builder.finish(msg, None);
+        builder.finish_size_prefixed(msg, None);
 
         let packet = builder.finished_data();
 
         let mut buf = Vec::with_capacity(2 + packet.len());
         buf.extend_from_slice(&self.ch.to_le_bytes());
         buf.extend_from_slice(packet);
+
+        self.send_bytes(buf.into()).await;
+    }
+
+    pub async fn send_msg_payload_with<'builder, T>(
+        &self,
+        builder: &mut FlatBufferBuilder<'builder>,
+        payload: &[u8],
+        f: impl FnOnce(&mut FlatBufferBuilder<'builder>) -> WIPOffset<T>,
+    ) {
+        builder.reset();
+
+        let msg = f(builder);
+        builder.finish_size_prefixed(msg, None);
+
+        let packet = builder.finished_data();
+
+        let mut buf = Vec::with_capacity(2 + packet.len() + payload.len());
+        buf.extend_from_slice(&self.ch.to_le_bytes());
+        buf.extend_from_slice(packet);
+        buf.extend_from_slice(payload);
 
         self.send_bytes(buf.into()).await;
     }

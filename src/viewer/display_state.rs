@@ -25,7 +25,9 @@ impl<'window> DisplayState<'window> {
             flags: Default::default(),
         });
 
-        let surface = unsafe { instance.create_surface(window) }.expect("unable to create surface");
+        let surface = instance
+            .create_surface(window)
+            .expect("unable to create surface");
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::LowPower,
