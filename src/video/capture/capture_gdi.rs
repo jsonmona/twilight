@@ -1,9 +1,15 @@
 use crate::image::{ColorFormat, Image, ImageBuf};
+use crate::network::dto::video::{RefreshRate, Resolution};
 use crate::util::{CursorShape, CursorState, DesktopUpdate};
 use crate::video::capture::CaptureStage;
-use anyhow::{ensure, Result};
+use crate::video::encoder::EncoderStage;
+use anyhow::{anyhow, bail, ensure, Result};
 use std::ffi::c_void;
 use std::mem::{size_of, zeroed};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, OnceLock, RwLock};
+use std::thread::JoinHandle;
+use std::time::Duration;
 use windows::Win32::Foundation::*;
 use windows::Win32::Graphics::Gdi::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
@@ -11,9 +17,167 @@ use windows::Win32::UI::WindowsAndMessaging::*;
 // https://github.com/obsproject/obs-studio/blob/6fb83abaeb711d1e12054d2ef539da5c43237c58/plugins/win-capture/dc-capture.c#L38
 
 #[derive(Debug)]
-pub struct GdiCaptureStage {
-    is_open: bool,
+pub struct CaptureGdi {
+    dev_id: Vec<u16>,
+    shutdown: AtomicBool,
+    next_stage: OnceLock<Arc<dyn EncoderStage>>,
+    worker: RwLock<Option<JoinHandle<Result<()>>>>,
+    resolution: OnceLock<Resolution>,
+}
 
+impl CaptureGdi {
+    /// dev_id: The slice from WCHAR szDevice[16]. Must end with a NULL character.
+    pub fn new(dev_id: Vec<u16>) -> Result<Arc<CaptureGdi>> {
+        assert_eq!(
+            dev_id.last(),
+            Some(&0),
+            "dev_id must end with a NULL character"
+        );
+
+        Ok(Arc::new(CaptureGdi {
+            dev_id,
+            shutdown: AtomicBool::new(false),
+            next_stage: Default::default(),
+            worker: Default::default(),
+            resolution: Default::default(),
+        }))
+    }
+}
+
+impl CaptureStage for CaptureGdi {
+    fn configured(&self) -> bool {
+        self.resolution.get().is_some()
+    }
+
+    fn resolution(&self) -> Result<Resolution> {
+        self.resolution
+            .get()
+            .cloned()
+            .ok_or_else(|| anyhow!("CaptureGdi not initialized yet"))
+    }
+
+    fn refresh_rate(&self) -> Result<RefreshRate> {
+        //FIXME: Report actual refresh rate (if possible at all)
+        log::warn!("STUB: reporting refresh rate of 1Hz");
+        Ok(RefreshRate { num: 1, den: 1 })
+    }
+
+    fn set_next_stage(&self, encoder: Arc<dyn EncoderStage>) -> Result<()> {
+        self.next_stage
+            .set(encoder)
+            .map_err(|_| anyhow!("next_stage already set"))
+    }
+
+    fn configure(self: Arc<Self>) -> Result<()> {
+        let this = Arc::clone(&self);
+        let next_stage = Arc::clone(
+            self.next_stage
+                .get()
+                .ok_or_else(|| anyhow!("next_stage not set"))?,
+        );
+
+        *self.worker.write().unwrap() = Some(std::thread::spawn(move || {
+            let mut resources = init_resources(&this)?;
+            while !this.shutdown.load(Ordering::Acquire) {
+                let update = capture_once(&mut resources)?;
+                next_stage.push(update);
+            }
+            Ok(())
+        }));
+
+        //TODO: Convert into a proper event based one
+        //      And what the hell is going on with all that unwraps?
+        while self.resolution.get().is_none() {
+            if self.worker.read().unwrap().as_ref().unwrap().is_finished() {
+                self.worker
+                    .write()
+                    .unwrap()
+                    .take()
+                    .unwrap()
+                    .join()
+                    .unwrap()?;
+                bail!("worker has silently finished without configuring");
+            }
+            std::thread::sleep(Duration::from_millis(1));
+        }
+
+        Ok(())
+    }
+
+    fn shutdown(&self) {
+        self.shutdown.store(true, Ordering::Release);
+    }
+}
+
+fn init_resources(this: &CaptureGdi) -> Result<Resources> {
+    //TODO: Use dev_id to decide which monitor to capture
+
+    unsafe {
+        //FIXME: Resource leak on early return
+
+        let hdc = GetDC(HWND(0));
+        ensure!(!hdc.is_invalid(), "unable to get desktop DC");
+
+        let memdc = CreateCompatibleDC(hdc);
+        ensure!(!memdc.is_invalid(), "unable to create compatible DC");
+
+        let width = GetSystemMetrics(SM_CXSCREEN);
+        let height = GetSystemMetrics(SM_CYSCREEN);
+        ensure!(width > 0 && height > 0, "unable to query screen size");
+
+        let width = width as u32;
+        let height = height as u32;
+
+        this.resolution
+            .set(Resolution { width, height })
+            .map_err(|_| anyhow!("resolution already set"))?;
+
+        // negate height to produce top-bottom bitmap
+        let bitmapinfo = BITMAPINFO {
+            bmiHeader: BITMAPINFOHEADER {
+                biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
+                biWidth: width as i32,
+                biHeight: -(height as i32),
+                biPlanes: 1,
+                biBitCount: 32,
+                biCompression: BI_RGB.0,
+                biSizeImage: 0,
+                biXPelsPerMeter: 0,
+                biYPelsPerMeter: 0,
+                biClrUsed: 0,
+                biClrImportant: 0,
+            },
+            bmiColors: std::mem::zeroed(),
+        };
+
+        let mut bitmap_data = std::ptr::null_mut();
+
+        let bitmap = CreateDIBSection(
+            hdc,
+            &bitmapinfo,
+            DIB_RGB_COLORS,
+            &mut bitmap_data,
+            HANDLE(0),
+            0,
+        )?;
+        ensure!(!bitmap.is_invalid(), "unable to create bitmap");
+
+        let old_bitmap = SelectObject(memdc, bitmap);
+
+        Ok(Resources {
+            hdc,
+            memdc,
+            width,
+            height,
+            bitmap,
+            bitmap_data: bitmap_data as *mut u8,
+            old_bitmap,
+            last_cursor: HCURSOR(0),
+        })
+    }
+}
+
+struct Resources {
     hdc: HDC,
     memdc: HDC,
     width: u32,
@@ -24,171 +188,7 @@ pub struct GdiCaptureStage {
     last_cursor: HCURSOR,
 }
 
-impl GdiCaptureStage {
-    pub fn new(dev_id: &[u16]) -> Result<GdiCaptureStage> {
-        assert_eq!(
-            dev_id.last(),
-            Some(&0),
-            "dev_id must end with a NULL character"
-        );
-
-        // SAFETY: FFI
-        unsafe {
-            //FIXME: Resource leak on early return
-
-            let hdc = GetDC(HWND(0));
-            ensure!(!hdc.is_invalid(), "unable to get desktop DC");
-
-            let memdc = CreateCompatibleDC(hdc);
-            ensure!(!memdc.is_invalid(), "unable to create compatible DC");
-
-            let width = GetSystemMetrics(SM_CXSCREEN);
-            let height = GetSystemMetrics(SM_CYSCREEN);
-            ensure!(width > 0 && height > 0, "unable to query screen size");
-
-            let width = width as u32;
-            let height = height as u32;
-
-            // negate height to produce top-bottom bitmap
-            let bitmapinfo = BITMAPINFO {
-                bmiHeader: BITMAPINFOHEADER {
-                    biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
-                    biWidth: width as i32,
-                    biHeight: -(height as i32),
-                    biPlanes: 1,
-                    biBitCount: 32,
-                    biCompression: BI_RGB.0,
-                    biSizeImage: 0,
-                    biXPelsPerMeter: 0,
-                    biYPelsPerMeter: 0,
-                    biClrUsed: 0,
-                    biClrImportant: 0,
-                },
-                bmiColors: std::mem::zeroed(),
-            };
-
-            let mut bitmap_data = std::ptr::null_mut();
-
-            let bitmap = CreateDIBSection(
-                hdc,
-                &bitmapinfo,
-                DIB_RGB_COLORS,
-                &mut bitmap_data,
-                HANDLE(0),
-                0,
-            )?;
-            ensure!(!bitmap.is_invalid(), "unable to create bitmap");
-
-            let old_bitmap = SelectObject(memdc, bitmap);
-
-            Ok(GdiCaptureStage {
-                is_open: true,
-                hdc,
-                memdc,
-                width,
-                height,
-                bitmap,
-                bitmap_data: bitmap_data as *mut u8,
-                old_bitmap,
-                last_cursor: HCURSOR(0),
-            })
-        }
-    }
-}
-
-impl CaptureStage for GdiCaptureStage {
-    fn resolution(&self) -> (u32, u32) {
-        (self.width, self.height)
-    }
-
-    fn next(&mut self) -> Result<DesktopUpdate<Image<&[u8]>>> {
-        assert!(self.is_open, "tried to capture from closed CaptureGdi");
-
-        let cursor_state;
-
-        let slice = unsafe {
-            // SAFETY: FFI
-            BitBlt(
-                self.memdc,
-                0,
-                0,
-                self.width as i32,
-                self.height as i32,
-                self.hdc,
-                0,
-                0,
-                SRCCOPY,
-            )?;
-
-            // Similar code in OBS: https://github.com/obsproject/obs-studio/blob/2ff210acfdf9f72ee6c845c9eacceae1886c275f/plugins/win-capture/cursor-capture.c#L201
-            let mut cursor_info: CURSORINFO = zeroed();
-            cursor_info.cbSize = size_of::<CURSORINFO>() as u32;
-            let ret = GetCursorInfo(&mut cursor_info);
-
-            cursor_state = if ret.is_ok() {
-                // only when GetCursorInfo succeeded
-
-                let shape = if self.last_cursor != cursor_info.hCursor {
-                    self.last_cursor = cursor_info.hCursor;
-
-                    let mut iconinfo = zeroed();
-                    let ret = GetIconInfo(cursor_info.hCursor, &mut iconinfo);
-                    if ret.is_ok() {
-                        let mut xor = false;
-                        let cursor = get_cursor_color(&iconinfo, &mut xor)
-                            .or_else(|| get_cursor_monochrome(&iconinfo, &mut xor));
-
-                        DeleteObject(iconinfo.hbmMask);
-                        DeleteObject(iconinfo.hbmColor);
-
-                        cursor.map(|image| CursorShape {
-                            image,
-                            xor,
-                            hotspot_x: 0.0,
-                            hotspot_y: 0.0,
-                        })
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                };
-
-                Some(CursorState {
-                    visible: (cursor_info.flags.0 & CURSOR_SHOWING.0) != 0,
-                    pos_x: cursor_info.ptScreenPos.x as u32,
-                    pos_y: cursor_info.ptScreenPos.y as u32,
-                    shape,
-                })
-            } else {
-                None
-            };
-
-            let ret = GdiFlush();
-            ensure!(ret.as_bool(), "failed to flush gdi");
-
-            let bytes = self.width as usize * self.height as usize * 4;
-            std::slice::from_raw_parts(self.bitmap_data, bytes)
-        };
-
-        Ok(DesktopUpdate {
-            cursor: cursor_state,
-            desktop: Image {
-                color_format: ColorFormat::Bgra8888,
-                width: self.width,
-                height: self.height,
-                stride: self.width * 4,
-                data: slice,
-            },
-        })
-    }
-
-    fn close(&mut self) {
-        self.is_open = false;
-    }
-}
-
-impl Drop for GdiCaptureStage {
+impl Drop for Resources {
     fn drop(&mut self) {
         // SAFETY: FFI
         unsafe {
@@ -200,6 +200,86 @@ impl Drop for GdiCaptureStage {
             DeleteDC(self.memdc);
         }
     }
+}
+
+fn capture_once(res: &mut Resources) -> Result<DesktopUpdate<ImageBuf>> {
+    let cursor_state;
+
+    let slice = unsafe {
+        BitBlt(
+            res.memdc,
+            0,
+            0,
+            res.width as i32,
+            res.height as i32,
+            res.hdc,
+            0,
+            0,
+            SRCCOPY,
+        )?;
+
+        // Similar code in OBS: https://github.com/obsproject/obs-studio/blob/2ff210acfdf9f72ee6c845c9eacceae1886c275f/plugins/win-capture/cursor-capture.c#L201
+        let mut cursor_info: CURSORINFO = zeroed();
+        cursor_info.cbSize = size_of::<CURSORINFO>() as u32;
+        let ret = GetCursorInfo(&mut cursor_info);
+
+        cursor_state = if ret.is_ok() {
+            // only when GetCursorInfo succeeded
+
+            let shape = if res.last_cursor != cursor_info.hCursor {
+                res.last_cursor = cursor_info.hCursor;
+
+                let mut iconinfo = zeroed();
+                let ret = GetIconInfo(cursor_info.hCursor, &mut iconinfo);
+                if ret.is_ok() {
+                    let mut xor = false;
+                    let cursor = get_cursor_color(&iconinfo, &mut xor)
+                        .or_else(|| get_cursor_monochrome(&iconinfo, &mut xor));
+
+                    DeleteObject(iconinfo.hbmMask);
+                    DeleteObject(iconinfo.hbmColor);
+
+                    cursor.map(|image| CursorShape {
+                        image,
+                        xor,
+                        hotspot_x: 0.0,
+                        hotspot_y: 0.0,
+                    })
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            Some(CursorState {
+                visible: (cursor_info.flags.0 & CURSOR_SHOWING.0) != 0,
+                pos_x: cursor_info.ptScreenPos.x as u32,
+                pos_y: cursor_info.ptScreenPos.y as u32,
+                shape,
+            })
+        } else {
+            None
+        };
+
+        let ret = GdiFlush();
+        ensure!(ret.as_bool(), "failed to flush gdi");
+
+        let bytes = res.width as usize * res.height as usize * 4;
+        std::slice::from_raw_parts(res.bitmap_data, bytes)
+    };
+
+    Ok(DesktopUpdate {
+        cursor: cursor_state,
+        desktop: Image {
+            color_format: ColorFormat::Bgra8888,
+            width: res.width,
+            height: res.height,
+            stride: res.width * 4,
+            data: slice,
+        }
+        .copied(),
+    })
 }
 
 unsafe fn get_bitmap_data(hbmp: HBITMAP) -> Option<(BITMAP, Vec<u8>)> {

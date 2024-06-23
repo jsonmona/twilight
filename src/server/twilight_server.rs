@@ -9,7 +9,7 @@ use std::{
 
 use crate::{schema::video::*, util::DesktopUpdate, video::capture_pipeline};
 
-use super::Channel;
+use super::{Channel, ServerConfig};
 
 /// The type that's carried around
 pub type SharedTwilightServer = RwLock<TwilightServer>;
@@ -17,13 +17,15 @@ pub type SharedTwilightServer = RwLock<TwilightServer>;
 /// Represents the server as whole.
 #[derive(Debug)]
 pub struct TwilightServer {
+    config: ServerConfig,
     channels: Box<[Weak<Channel>; u16::MAX as usize]>,
     next_channel: u16,
 }
 
 impl TwilightServer {
-    pub fn new() -> SharedTwilightServer {
+    pub fn new(config: ServerConfig) -> SharedTwilightServer {
         RwLock::new(Self {
+            config,
             channels: boxed_array_of_weak(),
             next_channel: 0,
         })
@@ -37,7 +39,7 @@ impl TwilightServer {
     pub fn subscribe_desktop(&mut self, monitor: &str, channel: Arc<Channel>) -> Result<()> {
         println!("subscribe to desktop on monitor {monitor}");
 
-        let (_, mut output) = capture_pipeline()?;
+        let (_, mut output) = capture_pipeline(&self.config)?;
 
         tokio::spawn(async move {
             let mut builder = FlatBufferBuilder::with_capacity(8192);

@@ -9,7 +9,11 @@ use windows::Win32::Foundation::*;
 use windows::Win32::Graphics::Gdi::*;
 use windows::{core::*, Win32::Graphics::Dxgi::CreateDXGIFactory1};
 
-use crate::network::dto::video::{MonitorInfo, RefreshRate, Resolution};
+use crate::{
+    network::dto::video::{MonitorInfo, RefreshRate, Resolution},
+    server::DesktopCaptureMethod,
+    video::capture::CaptureGdi,
+};
 
 use super::{CaptureDxgi, CaptureStage};
 
@@ -39,19 +43,29 @@ impl CaptureFactoryWin32 {
         }
     }
 
-    pub fn available_backends(&mut self) -> Vec<String> {
-        //TODO: Use enum
-        vec!["dxgi".into(), "gdi".into()]
+    pub fn available_backends(&mut self) -> Vec<DesktopCaptureMethod> {
+        use DesktopCaptureMethod as M;
+
+        vec![M::Dxgi, M::Gdi]
     }
 
-    pub fn start(&mut self, backend: &str, id: &str) -> Result<Arc<dyn CaptureStage>> {
+    pub fn start(
+        &mut self,
+        backend: DesktopCaptureMethod,
+        id: &str,
+    ) -> Result<Arc<dyn CaptureStage>> {
+        use DesktopCaptureMethod as M;
+
         let dev_id = decode_hex(id)?;
 
-        let factory = unsafe { CreateDXGIFactory1()? };
-
+        // apparantly non_exhausive don't work in same crate...
+        #[allow(unreachable_patterns)]
         match backend {
-            "dxgi" => Ok(CaptureDxgi::new(factory, dev_id)?),
-            "gdi" => panic!("gdi temporarily disabled"),
+            M::Dxgi => {
+                let factory = unsafe { CreateDXGIFactory1()? };
+                Ok(CaptureDxgi::new(factory, dev_id)?)
+            }
+            M::Gdi => Ok(CaptureGdi::new(dev_id)?),
             _ => Err(anyhow!("no such capture backend available")),
         }
     }

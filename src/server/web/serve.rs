@@ -4,7 +4,7 @@ use actix_web::{
 };
 use anyhow::Result;
 
-use crate::server::TwilightServer;
+use crate::server::{normal_defaults, TwilightServer};
 
 use super::{
     handler_auth::handler_auth, handler_capture::handler_capture, handler_channel::handler_channel,
@@ -14,8 +14,10 @@ use super::{
 pub async fn serve_web() -> Result<()> {
     let base_path = "/twilight";
 
+    let config = normal_defaults();
+
     let session_storage = web::Data::new(SessionStorage::new());
-    let twilight_server = web::Data::new(TwilightServer::new());
+    let twilight_server = web::Data::new(TwilightServer::new(config));
 
     HttpServer::new(move || {
         App::new()
