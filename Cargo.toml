@@ -23,7 +23,7 @@ clap = { version = "4.2.1", features = ["derive"] }
 cookie = "0.18.0"
 env_logger = "0.11.0"
 fastwebsockets = { version = "0.8.0", features = ["upgrade", "unstable-split"] }
-flatbuffers = "23.1.21"
+flatbuffers = "24.3.25"
 futures-util = "0.3.26"
 http-body-util = "0.1.0"
 hyper = { version = "1.0.0", features = ["http1"] }
@@ -35,8 +35,8 @@ parking_lot = "0.12.1"
 pollster = "0.3.0"
 rand = "0.8.5"
 regex = "1.7.1"
-reqwest = { version = "0.11.24", default-features = false }
-rustc-hash = "1.1.0"
+reqwest = { version = "0.12.5", default-features = false }
+rustc-hash = "2.0.0"
 serde = { version = "1.0.195", features = ["derive"] }
 serde_json = "1.0.111"
 smallvec = { version = "1.13.1", features = [
@@ -47,8 +47,8 @@ smallvec = { version = "1.13.1", features = [
 thiserror = "1.0.38"
 tokio = { version = "1.25.0", features = ["full"] }
 url = "2.3.1"
-wgpu = "0.19.0"
-winit = "0.29.10"
+wgpu = "0.20.1"
+winit = "0.30.3"
 zune-jpeg = "0.4.11"
 
 [dependencies.windows]

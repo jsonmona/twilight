@@ -7,7 +7,7 @@ use tokio::sync::oneshot;
 use tokio::task::LocalSet;
 
 pub fn launch(rt: Handle, args: ClientLaunchArgs) -> ! {
-    let mut viewer_app = ViewerApp::new(rt.clone());
+    let mut viewer_app = ViewerApp::build(rt.clone());
     let proxy = viewer_app.create_proxy();
     let (quit_tx, quit_rx) = oneshot::channel();
 
@@ -42,5 +42,5 @@ pub fn launch(rt: Handle, args: ClientLaunchArgs) -> ! {
         Ok(())
     }));
 
-    pollster::block_on(viewer_app.launch())
+    viewer_app.launch();
 }

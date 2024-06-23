@@ -1,17 +1,20 @@
+use std::rc::Rc;
+
 use anyhow::{ensure, Context, Result};
 use winit::window::Window;
 
-pub struct DisplayState<'window> {
-    pub surface: wgpu::Surface<'window>,
+pub struct DisplayState {
+    pub _window: Rc<Window>,
+    pub surface: wgpu::Surface<'static>,
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
     pub surface_config: wgpu::SurfaceConfiguration,
     pub size: winit::dpi::PhysicalSize<u32>,
 }
 
-impl<'window> DisplayState<'window> {
+impl DisplayState {
     /// Must be called from main thread
-    pub async fn new(window: &'window Window) -> Result<Self> {
+    pub async fn new(window: Rc<Window>) -> Result<Self> {
         let size = window.inner_size();
 
         // Use DX12 on windows (due to swapchain issue on Nvidia optimus laptop)
@@ -25,9 +28,17 @@ impl<'window> DisplayState<'window> {
             flags: Default::default(),
         });
 
-        let surface = instance
-            .create_surface(window)
-            .expect("unable to create surface");
+        //FIXME: Is this block really safe?
+        let surface = unsafe {
+            // Get &'static window from Rc
+            let static_window = &*Rc::as_ptr(&window);
+
+            // Actually use that to create the surface
+            instance
+                .create_surface(static_window)
+                .expect("unable to create surface")
+        };
+
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::LowPower,
@@ -67,6 +78,7 @@ impl<'window> DisplayState<'window> {
         surface.configure(&device, &surface_config);
 
         Ok(Self {
+            _window: window,
             surface,
             device,
             queue,

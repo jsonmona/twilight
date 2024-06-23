@@ -3,35 +3,48 @@ use crate::util::NonSend;
 use crate::viewer::desktop_view::DesktopView;
 use crate::viewer::display_state::DisplayState;
 use anyhow::Result;
-use cfg_if::cfg_if;
 use log::{error, info};
+use std::io::Write;
+use std::rc::Rc;
 use std::time::{Duration, Instant};
 use tokio::runtime::Handle;
-use winit::event;
-use winit::event::{Event, WindowEvent};
-use winit::event_loop::{ControlFlow, EventLoop, EventLoopBuilder, EventLoopProxy};
-use winit::window::WindowBuilder;
+use winit::application::ApplicationHandler;
+use winit::event::WindowEvent;
+use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy};
+use winit::window::{Window, WindowId};
 
-pub struct ViewerApp {
+pub struct ViewerAppBuilder {
     event_loop: EventLoop<TwilightClientEvent>,
     on_exit: Option<Box<dyn FnOnce() -> Result<()>>>,
-    _rt: Handle,
+    _guard: NonSend,
+}
+
+pub struct ViewerApp {
+    window: Option<Rc<Window>>,
+    on_exit: Option<Box<dyn FnOnce() -> Result<()>>>,
+    display_state: Option<DisplayState>,
+    desktop_view: Option<DesktopView>,
+    last_log_print: Instant,
+    frames_since_last_log: i32,
     _guard: NonSend,
 }
 
 impl ViewerApp {
     /// Must be called from main thread
-    pub fn new(rt: Handle) -> Self {
-        ViewerApp {
-            event_loop: EventLoopBuilder::<TwilightClientEvent>::with_user_event()
+    pub fn build(_rt: Handle) -> ViewerAppBuilder {
+        //TODO: Remove rt (parameter) if not needed
+
+        ViewerAppBuilder {
+            event_loop: EventLoop::<TwilightClientEvent>::with_user_event()
                 .build()
                 .unwrap(),
             on_exit: None,
-            _rt: rt,
             _guard: Default::default(),
         }
     }
+}
 
+impl ViewerAppBuilder {
     pub fn set_on_exit(&mut self, callback: Box<dyn FnOnce() -> Result<()>>) {
         self.on_exit = Some(callback);
     }
@@ -40,134 +53,144 @@ impl ViewerApp {
         self.event_loop.create_proxy()
     }
 
-    /// On native platform, use pollster to drive this function
-    pub async fn launch(mut self) -> ! {
-        let window = WindowBuilder::new().build(&self.event_loop).unwrap();
+    pub fn launch(self) -> ! {
+        let mut app = Box::new(ViewerApp {
+            window: None,
+            on_exit: self.on_exit,
+            display_state: None,
+            desktop_view: None,
+            last_log_print: Instant::now(),
+            frames_since_last_log: 0,
+            _guard: Default::default(),
+        });
 
-        let mut display_state: Option<DisplayState<'static>>;
-        let mut desktop_view: Option<DesktopView> = None;
+        self.event_loop.run_app(&mut app).unwrap();
 
-        cfg_if! {
-            if #[cfg(target_family = "wasm")] {
-                // wasm needs real await
-                display_state = Some(DisplayState::new(&window).await.unwrap());
-            } else {
-                display_state = None;
-            }
+        log::info!("Clean exit after event loop termination.");
+        std::mem::drop(app);
+        let _ = std::io::stderr().flush();
+        let _ = std::io::stdout().flush();
+        std::process::exit(0);
+    }
+}
+
+impl ApplicationHandler<TwilightClientEvent> for ViewerApp {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        event_loop.set_control_flow(ControlFlow::Wait);
+
+        if self.window.is_none() {
+            // create a new window
+            let window = Rc::new(
+                event_loop
+                    .create_window(Window::default_attributes())
+                    .unwrap(),
+            );
+            self.window = Some(window);
         }
 
-        let mut old_time = Instant::now();
-        let mut frames = 0u32;
+        let window = Rc::clone(&self.window.as_ref().expect("assigned just above"));
 
-        self.event_loop
-            .run(move |event, event_loop| match event {
-                Event::NewEvents(event::StartCause::Init) => {
-                    event_loop.set_control_flow(ControlFlow::Wait);
+        //FIXME: web needs real await
+        self.display_state = Some(pollster::block_on(DisplayState::new(window)).unwrap());
+    }
+
+    fn window_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        window_id: WindowId,
+        event: WindowEvent,
+    ) {
+        let window = self.window.as_mut().expect("guaranteed by winit");
+        assert_eq!(window.id(), window_id, "this app creates only 1 window");
+
+        let state = self.display_state.as_mut().unwrap();
+
+        //FIXME: Do I need to render here?
+
+        match event {
+            WindowEvent::CloseRequested => {
+                event_loop.exit();
+            }
+            WindowEvent::Resized(physical_size) => {
+                state.resize(physical_size);
+                window.request_redraw();
+            }
+            WindowEvent::ScaleFactorChanged { .. } => {
+                window.request_redraw();
+            }
+            WindowEvent::RedrawRequested => {
+                let state = self.display_state.as_mut().unwrap();
+
+                let elapsed = Instant::now() - self.last_log_print;
+                if elapsed > Duration::from_secs(10) {
+                    let fps = self.frames_since_last_log as f64 / elapsed.as_secs_f64();
+                    info!("Render FPS={fps:.2}");
+                    self.last_log_print = Instant::now();
+                    self.frames_since_last_log = 0;
                 }
-                Event::Resumed => {
-                    // Initialize graphic state here
-                    //TODO: What to do when display_state is not none? (relevant on mobile platforms)
-                    if display_state.is_none() {
-                        log::error!("Unsound transmute of Window.");
-                        //FIXME: Killing lifetime to maintain previous code structure.
-                        //       Will remove this when refactoring.
-                        display_state = unsafe {
-                            let ds = pollster::block_on(DisplayState::new(&window)).unwrap();
-                            let ds = std::mem::transmute(ds);
-                            Some(ds)
-                        };
-                    }
-                }
-                Event::UserEvent(kind) => match kind {
-                    TwilightClientEvent::Connected(info) => {
-                        info!("Connected to {info:?}");
+                self.frames_since_last_log += 1;
 
-                        let width = info.resolution.width;
-                        let height = info.resolution.height;
+                let render_result = match self.desktop_view.as_mut() {
+                    Some(x) => x.render(state),
+                    None => state.render_empty(),
+                };
 
-                        let state = display_state.as_mut().unwrap();
-                        desktop_view = Some(DesktopView::new(state, width, height));
-                    }
-                    TwilightClientEvent::NextFrame(update) => {
+                match render_result {
+                    Ok(_) => {}
+                    Err(wgpu::SurfaceError::Lost) => {
+                        state.reconfigure_surface();
                         window.request_redraw();
-                        desktop_view
-                            .as_mut()
-                            .expect("resolution not set before render")
-                            .update(update);
                     }
-                    TwilightClientEvent::Closed(r) => {
-                        //FIXME: Anything better to do than unwrap?
-                        r.unwrap();
+                    Err(e) => {
+                        error!("{e}");
                         event_loop.exit();
                     }
-                },
-                Event::WindowEvent {
-                    window_id,
-                    ref event,
-                } if window_id == window.id() => {
-                    let state = display_state.as_mut().unwrap();
-
-                    //TODO: Handle input here
-                    //FIXME: Do I need to render here?
-
-                    match event {
-                        WindowEvent::CloseRequested => {
-                            event_loop.exit();
-                        }
-                        WindowEvent::Resized(physical_size) => {
-                            state.resize(*physical_size);
-                            window.request_redraw();
-                        }
-                        WindowEvent::ScaleFactorChanged {
-                            inner_size_writer, ..
-                        } => {
-                            //FIXME: What should I do?
-                            //state.resize(**inner_size_writer);
-                            window.request_redraw();
-                        }
-                        WindowEvent::RedrawRequested => {
-                            let state = display_state.as_mut().unwrap();
-
-                            let elapsed = Instant::now() - old_time;
-                            if elapsed > Duration::from_secs(10) {
-                                let fps = frames as f64 / elapsed.as_secs_f64();
-                                info!("Render FPS={fps:.2}");
-                                old_time = Instant::now();
-                                frames = 0;
-                            }
-                            frames += 1;
-
-                            let render_result = match desktop_view.as_mut() {
-                                Some(x) => x.render(state),
-                                None => state.render_empty(),
-                            };
-
-                            match render_result {
-                                Ok(_) => {}
-                                Err(wgpu::SurfaceError::Lost) => {
-                                    state.reconfigure_surface();
-                                    window.request_redraw();
-                                }
-                                Err(e) => {
-                                    error!("{e}");
-                                    event_loop.exit();
-                                }
-                            }
-                        }
-                        _ => {}
-                    }
                 }
-                Event::LoopExiting => {
-                    if let Some(f) = self.on_exit.take() {
-                        if let Err(e) = f() {
-                            error!("on_exit callback returned an error:\n{e:?}");
-                        }
-                    }
-                }
-                _ => {}
-            })
-            .unwrap();
+            }
+            _ => {}
+        }
+    }
 
-        panic!("I need to be refactored after library version bump");
+    fn user_event(&mut self, event_loop: &ActiveEventLoop, event: TwilightClientEvent) {
+        match event {
+            TwilightClientEvent::Connected(info) => {
+                info!("Connected to {info:?}");
+
+                let width = info.resolution.width;
+                let height = info.resolution.height;
+
+                let state = self.display_state.as_mut().unwrap();
+                self.desktop_view = Some(DesktopView::new(state, width, height));
+            }
+            TwilightClientEvent::NextFrame(update) => {
+                if let Some(window) = self.window.as_ref() {
+                    window.request_redraw();
+                    self.desktop_view
+                        .as_mut()
+                        .expect("resolution not set before render")
+                        .update(update);
+                }
+            }
+            TwilightClientEvent::Closed(r) => {
+                if let Err(e) = r {
+                    log::error!("Exiting event loop due to error:\n{e:?}");
+                }
+                event_loop.exit();
+            }
+        }
+    }
+
+    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
+        if let Some(window) = self.window.as_ref() {
+            window.request_redraw();
+        }
+    }
+
+    fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
+        if let Some(f) = self.on_exit.take() {
+            if let Err(e) = f() {
+                error!("on_exit callback returned an error:\n{e:?}");
+            }
+        }
     }
 }
