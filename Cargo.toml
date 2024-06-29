@@ -24,6 +24,7 @@ cookie = "0.18.0"
 env_logger = "0.11.0"
 fastwebsockets = { version = "0.8.0", features = ["upgrade", "unstable-split"] }
 flatbuffers = "24.3.25"
+flume = "0.11.0"
 futures-util = "0.3.26"
 http-body-util = "0.1.0"
 hyper = { version = "1.0.0", features = ["http1"] }

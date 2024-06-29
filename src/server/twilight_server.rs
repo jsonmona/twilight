@@ -39,15 +39,15 @@ impl TwilightServer {
     pub fn subscribe_desktop(&mut self, monitor: &str, channel: Arc<Channel>) -> Result<()> {
         println!("subscribe to desktop on monitor {monitor}");
 
-        let (_, mut output) = capture_pipeline(&self.config)?;
+        let (_, output) = capture_pipeline(&self.config)?;
 
         tokio::spawn(async move {
             let mut builder = FlatBufferBuilder::with_capacity(8192);
 
             loop {
-                let update = match output.recv().await {
-                    Some(x) => x,
-                    None => break,
+                let update = match output.recv_async().await {
+                    Ok(x) => x,
+                    Err(_) => break,
                 };
 
                 match send_desktop_update(&channel, &mut builder, &update).await {

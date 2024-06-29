@@ -1,10 +1,10 @@
 use std::io::Cursor;
-use std::sync::Arc;
+use std::sync::{Arc, Condvar, Mutex};
+use std::thread::JoinHandle;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
 use jpeg_encoder::{ColorType, Encoder, SamplingFactor};
-use parking_lot::{Condvar, Mutex, MutexGuard};
 
 use crate::image::{ColorFormat, Image, ImageBuf};
 use crate::util::DesktopUpdate;
@@ -12,18 +12,58 @@ use crate::video::encoder::stage::EncoderStage;
 
 #[derive(Debug)]
 pub struct JpegEncoder {
-    output: Mutex<Option<DesktopUpdate<ImageBuf>>>,
-    event: Condvar,
-    yuv444: bool,
+    input: flume::Sender<DesktopUpdate<ImageBuf>>,
+    output: Mutex<Option<flume::Sender<DesktopUpdate<Vec<u8>>>>>,
+    configured: Condvar,
+    _worker: JoinHandle<Result<()>>,
 }
 
 impl JpegEncoder {
     pub fn new(yuv444: bool) -> Result<Arc<Self>> {
-        Ok(Arc::new(JpegEncoder {
-            output: Mutex::new(None),
-            event: Condvar::new(),
-            yuv444,
-        }))
+        let (tx, rx) = flume::bounded::<DesktopUpdate<ImageBuf>>(1);
+
+        let instance = Arc::new_cyclic(move |ptr_outer| {
+            let ptr = ptr_outer.clone();
+
+            let worker = std::thread::spawn(move || {
+                let this: Arc<Self> = loop {
+                    match ptr.upgrade() {
+                        Some(x) => break x,
+                        None => std::thread::sleep(Duration::from_millis(10)),
+                    }
+                };
+
+                let tx = {
+                    let mut guard = this.output.lock().unwrap();
+                    while guard.is_none() {
+                        guard = this.configured.wait(guard).unwrap();
+                    }
+
+                    guard.as_ref().expect("checked above").clone()
+                };
+
+                while let Ok(mut update) = rx.recv() {
+                    update.timings.encode_begin = update.timings.elapsed_since_capture().unwrap();
+                    let encoded = encode_img(update.desktop.as_data_ref(), yuv444)?;
+                    update.timings.encode_end = update.timings.elapsed_since_capture().unwrap();
+
+                    if tx.send(update.with_desktop(encoded)).is_err() {
+                        return Ok(());
+                    }
+                }
+
+                Ok(())
+            });
+
+            JpegEncoder {
+                input: tx,
+                output: Mutex::new(None),
+                configured: Condvar::new(),
+                _worker: worker,
+            }
+        });
+
+        Ok(instance)
     }
 }
 
@@ -36,48 +76,13 @@ impl EncoderStage for JpegEncoder {
         Ok(())
     }
 
-    fn push(&self, update: DesktopUpdate<ImageBuf>) {
-        let mut guard = self.output.lock();
-        while guard.is_some() {
-            if self
-                .event
-                .wait_for(&mut guard, Duration::from_secs(1))
-                .timed_out()
-            {
-                log::warn!("JpegEncoder::push waited 1s");
-            }
-        }
-
-        assert!(guard.is_none());
-        *guard = Some(update);
-
-        self.event.notify_all();
-        MutexGuard::unlock_fair(guard);
+    fn input(&self) -> flume::Sender<DesktopUpdate<ImageBuf>> {
+        self.input.clone()
     }
 
-    fn pop(&self) -> Result<DesktopUpdate<Vec<u8>>> {
-        let mut guard = self.output.lock();
-        while guard.is_none() {
-            if self
-                .event
-                .wait_for(&mut guard, Duration::from_secs(1))
-                .timed_out()
-            {
-                log::warn!("JpegEncoder::pop waited 1s");
-            }
-        }
-
-        let mut output = guard.take().expect("checked");
-
-        self.event.notify_all();
-        MutexGuard::unlock_fair(guard);
-
-        output.timings.encode_begin = output.timings.elapsed_since_capture().unwrap();
-
-        let mut ret = output.and_then_desktop(|img| encode_img(img.as_data_ref(), self.yuv444))?;
-        ret.timings.encode_end = ret.timings.elapsed_since_capture().unwrap();
-
-        Ok(ret)
+    fn set_output(&self, tx: flume::Sender<DesktopUpdate<Vec<u8>>>) {
+        *self.output.lock().unwrap() = Some(tx);
+        self.configured.notify_all();
     }
 
     fn shutdown(&self) {}

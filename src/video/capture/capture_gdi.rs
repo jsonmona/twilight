@@ -70,17 +70,17 @@ impl CaptureStage for CaptureGdi {
 
     fn configure(self: Arc<Self>) -> Result<()> {
         let this = Arc::clone(&self);
-        let next_stage = Arc::clone(
-            self.next_stage
-                .get()
-                .ok_or_else(|| anyhow!("next_stage not set"))?,
-        );
+        let next_tx = self
+            .next_stage
+            .get()
+            .map(|stage| stage.input())
+            .ok_or_else(|| anyhow!("next_stage not set"))?;
 
         *self.worker.write().unwrap() = Some(std::thread::spawn(move || {
             let mut resources = init_resources(&this)?;
             while !this.shutdown.load(Ordering::Acquire) {
                 let update = capture_once(&mut resources)?;
-                next_stage.push(update);
+                next_tx.send(update)?;
             }
             Ok(())
         }));

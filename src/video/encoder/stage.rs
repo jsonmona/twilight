@@ -6,8 +6,8 @@ pub trait EncoderStage: Debug + Send + Sync {
     fn configured(&self) -> bool;
     fn configure(self: Arc<Self>) -> Result<()>;
 
-    fn push(&self, update: DesktopUpdate<ImageBuf>);
-    fn pop(&self) -> Result<DesktopUpdate<Vec<u8>>>;
+    fn input(&self) -> flume::Sender<DesktopUpdate<ImageBuf>>;
+    fn set_output(&self, tx: flume::Sender<DesktopUpdate<Vec<u8>>>);
 
     fn shutdown(&self);
 }

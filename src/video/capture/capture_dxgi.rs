@@ -123,7 +123,11 @@ struct Resources {
 }
 
 fn capture_loop(stage: Arc<CaptureDxgi>) -> Result<()> {
-    let next_stage = Arc::clone(stage.next_stage.get().context("next_stage not set")?);
+    let next_tx = stage
+        .next_stage
+        .get()
+        .map(|stage| stage.input())
+        .context("next_stage not set")?;
 
     unsafe {
         let mut res = init_capture(&stage)?;
@@ -135,7 +139,7 @@ fn capture_loop(stage: Arc<CaptureDxgi>) -> Result<()> {
             if let Some(update) = next_img(&mut res, is_first)? {
                 let update = update.and_then_desktop(|tex| download_image(&mut res, &tex))?;
 
-                next_stage.push(update);
+                next_tx.send(update)?;
 
                 is_first = false;
             }
