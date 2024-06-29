@@ -67,12 +67,17 @@ impl EncoderStage for JpegEncoder {
             }
         }
 
-        let output = guard.take().expect("checked");
+        let mut output = guard.take().expect("checked");
 
         self.event.notify_all();
         MutexGuard::unlock_fair(guard);
 
-        output.and_then_desktop(|img| encode_img(img.as_data_ref(), self.yuv444))
+        output.timings.encode_begin = output.timings.elapsed_since_capture().unwrap();
+
+        let mut ret = output.and_then_desktop(|img| encode_img(img.as_data_ref(), self.yuv444))?;
+        ret.timings.encode_end = ret.timings.elapsed_since_capture().unwrap();
+
+        Ok(ret)
     }
 
     fn shutdown(&self) {}

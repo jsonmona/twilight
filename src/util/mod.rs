@@ -7,6 +7,7 @@ mod performance_monitor;
 mod spawn_thread_asyncify;
 mod thread_manager;
 mod timer;
+mod timings;
 mod unwrapped_refmut;
 
 pub use as_usize::AsUsize;
@@ -18,4 +19,5 @@ pub use performance_monitor::{PerformanceMonitor, PerformanceStats};
 pub use spawn_thread_asyncify::spawn_thread_asyncify;
 pub use thread_manager::ThreadManager;
 pub use timer::Timer;
+pub use timings::Timings;
 pub use unwrapped_refmut::UnwrappedRefMut;

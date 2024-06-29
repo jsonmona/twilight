@@ -35,6 +35,7 @@ table NotifyVideoStop {
 table VideoFrame {
   video_bytes:uint64;
   cursor_update:CursorUpdate;
+  timings:Timings;
 }
 
 table CursorUpdate {
@@ -49,4 +50,10 @@ table CursorShape {
   xor:bool;
   hotspot:Coord2f;
   resolution:Size2u;
+}
+
+table Timings {
+  encode_begin:uint32;
+  encode_end:uint32;
+  network_send:uint32;
 }

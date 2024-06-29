@@ -131,11 +131,21 @@ async fn send_desktop_update(
             )
         });
 
+        let timings = Timings::create(
+            builder,
+            &TimingsArgs {
+                encode_begin: update.timings.encode_begin.as_micros(),
+                encode_end: update.timings.encode_end.as_micros(),
+                network_send: update.timings.elapsed_since_capture().unwrap().as_micros(),
+            },
+        );
+
         VideoFrame::create(
             builder,
             &VideoFrameArgs {
                 video_bytes: update.desktop.len().try_into().unwrap(),
                 cursor_update,
+                timings: Some(timings),
             },
         )
     })

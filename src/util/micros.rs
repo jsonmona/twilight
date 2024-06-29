@@ -1,9 +1,24 @@
 use bytemuck::{Pod, Zeroable};
+use serde::{Deserialize, Serialize};
 use std::num::TryFromIntError;
 use std::ops::{Add, Sub};
 use std::time::Duration;
 
-#[derive(Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Zeroable, Pod)]
+#[derive(
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Debug,
+    Zeroable,
+    Pod,
+    Serialize,
+    Deserialize,
+)]
 #[repr(transparent)]
 pub struct Micros(u32);
 

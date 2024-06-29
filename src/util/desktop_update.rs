@@ -1,8 +1,9 @@
-use crate::util::CursorState;
+use crate::util::{CursorState, Timings};
 
 #[derive(Debug, Clone)]
 pub struct DesktopUpdate<T: ?Sized> {
     pub cursor: Option<CursorState>,
+    pub timings: Timings,
     pub desktop: T,
 }
 
@@ -11,6 +12,7 @@ impl<T> DesktopUpdate<T> {
         (
             DesktopUpdate {
                 cursor: self.cursor,
+                timings: self.timings,
                 desktop: (),
             },
             self.desktop,
@@ -21,6 +23,7 @@ impl<T> DesktopUpdate<T> {
         (
             DesktopUpdate {
                 cursor: self.cursor.clone(),
+                timings: self.timings.clone(),
                 desktop: (),
             },
             &self.desktop,
@@ -30,6 +33,7 @@ impl<T> DesktopUpdate<T> {
     pub fn with_desktop<R>(self, desktop: R) -> DesktopUpdate<R> {
         DesktopUpdate {
             cursor: self.cursor,
+            timings: self.timings,
             desktop,
         }
     }
@@ -40,6 +44,7 @@ impl<T> DesktopUpdate<T> {
     {
         DesktopUpdate {
             cursor: self.cursor,
+            timings: self.timings,
             desktop: map_fn(self.desktop),
         }
     }
@@ -50,6 +55,7 @@ impl<T> DesktopUpdate<T> {
     {
         Ok(DesktopUpdate {
             cursor: self.cursor,
+            timings: self.timings,
             desktop: map_fn(self.desktop)?,
         })
     }

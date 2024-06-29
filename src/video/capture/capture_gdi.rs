@@ -1,6 +1,6 @@
 use crate::image::{ColorFormat, Image, ImageBuf};
 use crate::network::dto::video::{RefreshRate, Resolution};
-use crate::util::{CursorShape, CursorState, DesktopUpdate};
+use crate::util::{CursorShape, CursorState, DesktopUpdate, Timings};
 use crate::video::capture::CaptureStage;
 use crate::video::encoder::EncoderStage;
 use anyhow::{anyhow, bail, ensure, Result};
@@ -9,7 +9,7 @@ use std::mem::{size_of, zeroed};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock, RwLock};
 use std::thread::JoinHandle;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use windows::Win32::Foundation::*;
 use windows::Win32::Graphics::Gdi::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
@@ -269,8 +269,12 @@ fn capture_once(res: &mut Resources) -> Result<DesktopUpdate<ImageBuf>> {
         std::slice::from_raw_parts(res.bitmap_data, bytes)
     };
 
+    let mut timings = Timings::new();
+    timings.capture = Instant::now().into();
+
     Ok(DesktopUpdate {
         cursor: cursor_state,
+        timings,
         desktop: Image {
             color_format: ColorFormat::Bgra8888,
             width: res.width,

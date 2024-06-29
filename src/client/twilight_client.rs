@@ -7,14 +7,15 @@ use crate::network::dto::channel::OpenChannelResponse;
 use crate::network::dto::video::{DesktopInfo, MonitorInfo, StartCapture};
 use crate::schema::video::{Coord2f, Coord2u, VideoCodec, VideoFrame};
 use crate::schema::{parse_msg, parse_msg_payload};
-use crate::util::ThreadManager;
-use crate::util::{CursorShape, CursorState, DesktopUpdate};
+use crate::util::{CursorShape, CursorState, DesktopUpdate, Micros};
+use crate::util::{ThreadManager, Timings};
 use crate::video::decoder::jpeg::JpegDecoder;
 use crate::video::decoder::DecoderStage;
 use anyhow::{anyhow, Result};
 use hyper::body::Bytes;
 use hyper::Method;
 use std::rc::Rc;
+use std::time::Instant;
 use tokio::sync::{mpsc, watch};
 use tokio::task::JoinHandle;
 
@@ -30,7 +31,7 @@ type EventCb = Rc<dyn Fn(TwilightClientEvent)>;
 /// Represents connection to a single server.
 pub struct TwilightClient {
     shutdown: watch::Sender<bool>,
-    worker: JoinHandle<()>,
+    _worker: JoinHandle<()>,
 }
 
 impl TwilightClient {
@@ -52,7 +53,7 @@ impl TwilightClient {
 
         TwilightClient {
             shutdown: tx,
-            worker,
+            _worker: worker,
         }
     }
 
@@ -78,8 +79,12 @@ fn decoder_pipeline(
     thread_manager
         .spawn_named("decoder_pipeline", move || {
             let mut decoder = JpegDecoder::new(w, h)?;
-            while let Some(update) = data_rx.blocking_recv() {
-                let update = update.and_then_desktop(|x| decoder.decode(&x))?;
+            while let Some(mut update) = data_rx.blocking_recv() {
+                update.timings.decode_begin = update.timings.elapsed_since_recv().unwrap();
+
+                let mut update = update.and_then_desktop(|x| decoder.decode(&x))?;
+                update.timings.decode_end = update.timings.elapsed_since_recv().unwrap();
+
                 img_tx
                     .blocking_send(update)
                     .map_err(|_| anyhow!("img_rx closed"))?;
@@ -224,6 +229,16 @@ async fn worker(
                     }),
                 }
             }),
+            timings: frame
+                .timings()
+                .map(|x| Timings {
+                    encode_begin: Micros::from_micros(x.encode_begin()),
+                    encode_end: Micros::from_micros(x.encode_begin()),
+                    network_send: Micros::from_micros(x.network_send()),
+                    network_recv: Instant::now().into(),
+                    ..Default::default()
+                })
+                .unwrap_or_default(),
             desktop: payload,
         };
 

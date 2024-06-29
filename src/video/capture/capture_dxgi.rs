@@ -1,5 +1,5 @@
 use crate::image::{ColorFormat, Image, ImageBuf};
-use crate::util::{AsUsize, CursorShape, CursorState, DesktopUpdate, NonSend};
+use crate::util::{AsUsize, CursorShape, CursorState, DesktopUpdate, NonSend, Timings};
 use crate::video::capture::CaptureStage;
 use crate::video::encoder::EncoderStage;
 use anyhow::{anyhow, ensure, Context, Result};
@@ -12,6 +12,7 @@ use std::ptr::slice_from_raw_parts;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::thread::JoinHandle;
+use std::time::Instant;
 use windows::core::*;
 use windows::Win32::Graphics::Direct3D::*;
 use windows::Win32::Graphics::Direct3D11::*;
@@ -361,8 +362,12 @@ unsafe fn next_img(
                 //TODO: Some optimization may happen here
             }
 
+            let mut timings = Timings::new();
+            timings.capture = Instant::now().into();
+
             Ok(Some(DesktopUpdate {
                 cursor,
+                timings,
                 desktop: desktop
                     .context("a successful AcquireNextFrame did not return texture")?
                     .cast()?,

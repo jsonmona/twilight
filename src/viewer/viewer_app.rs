@@ -1,5 +1,5 @@
 use crate::client::TwilightClientEvent;
-use crate::util::NonSend;
+use crate::util::{NonSend, PerformanceStats};
 use crate::viewer::desktop_view::DesktopView;
 use crate::viewer::display_state::DisplayState;
 use anyhow::Result;
@@ -121,12 +121,23 @@ impl ApplicationHandler<TwilightClientEvent> for ViewerApp {
             WindowEvent::RedrawRequested => {
                 let state = self.display_state.as_mut().unwrap();
 
-                let elapsed = Instant::now() - self.last_log_print;
+                let elapsed = self.last_log_print.elapsed();
                 if elapsed > Duration::from_secs(10) {
                     let fps = self.frames_since_last_log as f64 / elapsed.as_secs_f64();
                     info!("Render FPS={fps:.2}");
                     self.last_log_print = Instant::now();
                     self.frames_since_last_log = 0;
+
+                    if let Some(inner) = self.desktop_view.as_ref() {
+                        let f = |x: PerformanceStats| x.avg.as_secs_f32();
+
+                        log::info!("encode_wait={:?}", inner.encode_wait.get().map(f));
+                        log::info!("encode={:?}", inner.encode.get().map(f));
+                        log::info!("send_wait={:?}", inner.send_wait.get().map(f));
+                        log::info!("decode_wait={:?}", inner.decode_wait.get().map(f));
+                        log::info!("decode={:?}", inner.decode.get().map(f));
+                        log::info!("present_wait={:?}", inner.present_wait.get().map(f));
+                    }
                 }
                 self.frames_since_last_log += 1;
 

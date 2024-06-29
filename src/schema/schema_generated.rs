@@ -129,8 +129,8 @@ impl<'a> NotifyAudioStart<'a> {
     NotifyAudioStart { _tab: table }
   }
   #[allow(unused_mut)]
-  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
-    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr, A: flatbuffers::Allocator + 'bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr, A>,
     args: &'args NotifyAudioStartArgs
   ) -> flatbuffers::WIPOffset<NotifyAudioStart<'bldr>> {
     let mut builder = NotifyAudioStartBuilder::new(_fbb);
@@ -205,11 +205,11 @@ impl<'a> Default for NotifyAudioStartArgs {
   }
 }
 
-pub struct NotifyAudioStartBuilder<'a: 'b, 'b> {
-  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+pub struct NotifyAudioStartBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
   start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
 }
-impl<'a: 'b, 'b> NotifyAudioStartBuilder<'a, 'b> {
+impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> NotifyAudioStartBuilder<'a, 'b, A> {
   #[inline]
   pub fn add_stream(&mut self, stream: u16) {
     self.fbb_.push_slot::<u16>(NotifyAudioStart::VT_STREAM, stream, 0);
@@ -227,7 +227,7 @@ impl<'a: 'b, 'b> NotifyAudioStartBuilder<'a, 'b> {
     self.fbb_.push_slot::<AudioCodec>(NotifyAudioStart::VT_CODEC, codec, AudioCodec::Null);
   }
   #[inline]
-  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> NotifyAudioStartBuilder<'a, 'b> {
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>) -> NotifyAudioStartBuilder<'a, 'b, A> {
     let start = _fbb.start_table();
     NotifyAudioStartBuilder {
       fbb_: _fbb,
@@ -274,8 +274,8 @@ impl<'a> NotifyAudioStop<'a> {
     NotifyAudioStop { _tab: table }
   }
   #[allow(unused_mut)]
-  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
-    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr, A: flatbuffers::Allocator + 'bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr, A>,
     args: &'args NotifyAudioStopArgs
   ) -> flatbuffers::WIPOffset<NotifyAudioStop<'bldr>> {
     let mut builder = NotifyAudioStopBuilder::new(_fbb);
@@ -317,17 +317,17 @@ impl<'a> Default for NotifyAudioStopArgs {
   }
 }
 
-pub struct NotifyAudioStopBuilder<'a: 'b, 'b> {
-  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+pub struct NotifyAudioStopBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
   start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
 }
-impl<'a: 'b, 'b> NotifyAudioStopBuilder<'a, 'b> {
+impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> NotifyAudioStopBuilder<'a, 'b, A> {
   #[inline]
   pub fn add_stream(&mut self, stream: u16) {
     self.fbb_.push_slot::<u16>(NotifyAudioStop::VT_STREAM, stream, 0);
   }
   #[inline]
-  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> NotifyAudioStopBuilder<'a, 'b> {
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>) -> NotifyAudioStopBuilder<'a, 'b, A> {
     let start = _fbb.start_table();
     NotifyAudioStopBuilder {
       fbb_: _fbb,
@@ -371,8 +371,8 @@ impl<'a> AudioFrame<'a> {
     AudioFrame { _tab: table }
   }
   #[allow(unused_mut)]
-  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
-    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr, A: flatbuffers::Allocator + 'bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr, A>,
     args: &'args AudioFrameArgs
   ) -> flatbuffers::WIPOffset<AudioFrame<'bldr>> {
     let mut builder = AudioFrameBuilder::new(_fbb);
@@ -414,17 +414,17 @@ impl<'a> Default for AudioFrameArgs {
   }
 }
 
-pub struct AudioFrameBuilder<'a: 'b, 'b> {
-  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+pub struct AudioFrameBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
   start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
 }
-impl<'a: 'b, 'b> AudioFrameBuilder<'a, 'b> {
+impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> AudioFrameBuilder<'a, 'b, A> {
   #[inline]
   pub fn add_audio_bytes(&mut self, audio_bytes: u64) {
     self.fbb_.push_slot::<u64>(AudioFrame::VT_AUDIO_BYTES, audio_bytes, 0);
   }
   #[inline]
-  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> AudioFrameBuilder<'a, 'b> {
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>) -> AudioFrameBuilder<'a, 'b, A> {
     let start = _fbb.start_table();
     AudioFrameBuilder {
       fbb_: _fbb,
@@ -946,8 +946,8 @@ impl<'a> NotifyVideoStart<'a> {
     NotifyVideoStart { _tab: table }
   }
   #[allow(unused_mut)]
-  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
-    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr, A: flatbuffers::Allocator + 'bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr, A>,
     args: &'args NotifyVideoStartArgs<'args>
   ) -> flatbuffers::WIPOffset<NotifyVideoStart<'bldr>> {
     let mut builder = NotifyVideoStartBuilder::new(_fbb);
@@ -1011,11 +1011,11 @@ impl<'a> Default for NotifyVideoStartArgs<'a> {
   }
 }
 
-pub struct NotifyVideoStartBuilder<'a: 'b, 'b> {
-  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+pub struct NotifyVideoStartBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
   start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
 }
-impl<'a: 'b, 'b> NotifyVideoStartBuilder<'a, 'b> {
+impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> NotifyVideoStartBuilder<'a, 'b, A> {
   #[inline]
   pub fn add_stream(&mut self, stream: u16) {
     self.fbb_.push_slot::<u16>(NotifyVideoStart::VT_STREAM, stream, 0);
@@ -1029,7 +1029,7 @@ impl<'a: 'b, 'b> NotifyVideoStartBuilder<'a, 'b> {
     self.fbb_.push_slot::<VideoCodec>(NotifyVideoStart::VT_DESKTOP_CODEC, desktop_codec, VideoCodec::Null);
   }
   #[inline]
-  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> NotifyVideoStartBuilder<'a, 'b> {
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>) -> NotifyVideoStartBuilder<'a, 'b, A> {
     let start = _fbb.start_table();
     NotifyVideoStartBuilder {
       fbb_: _fbb,
@@ -1075,8 +1075,8 @@ impl<'a> NotifyVideoStop<'a> {
     NotifyVideoStop { _tab: table }
   }
   #[allow(unused_mut)]
-  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
-    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr, A: flatbuffers::Allocator + 'bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr, A>,
     args: &'args NotifyVideoStopArgs
   ) -> flatbuffers::WIPOffset<NotifyVideoStop<'bldr>> {
     let mut builder = NotifyVideoStopBuilder::new(_fbb);
@@ -1118,17 +1118,17 @@ impl<'a> Default for NotifyVideoStopArgs {
   }
 }
 
-pub struct NotifyVideoStopBuilder<'a: 'b, 'b> {
-  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+pub struct NotifyVideoStopBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
   start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
 }
-impl<'a: 'b, 'b> NotifyVideoStopBuilder<'a, 'b> {
+impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> NotifyVideoStopBuilder<'a, 'b, A> {
   #[inline]
   pub fn add_stream(&mut self, stream: u16) {
     self.fbb_.push_slot::<u16>(NotifyVideoStop::VT_STREAM, stream, 0);
   }
   #[inline]
-  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> NotifyVideoStopBuilder<'a, 'b> {
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>) -> NotifyVideoStopBuilder<'a, 'b, A> {
     let start = _fbb.start_table();
     NotifyVideoStopBuilder {
       fbb_: _fbb,
@@ -1167,18 +1167,20 @@ impl<'a> flatbuffers::Follow<'a> for VideoFrame<'a> {
 impl<'a> VideoFrame<'a> {
   pub const VT_VIDEO_BYTES: flatbuffers::VOffsetT = 4;
   pub const VT_CURSOR_UPDATE: flatbuffers::VOffsetT = 6;
+  pub const VT_TIMINGS: flatbuffers::VOffsetT = 8;
 
   #[inline]
   pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
     VideoFrame { _tab: table }
   }
   #[allow(unused_mut)]
-  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
-    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr, A: flatbuffers::Allocator + 'bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr, A>,
     args: &'args VideoFrameArgs<'args>
   ) -> flatbuffers::WIPOffset<VideoFrame<'bldr>> {
     let mut builder = VideoFrameBuilder::new(_fbb);
     builder.add_video_bytes(args.video_bytes);
+    if let Some(x) = args.timings { builder.add_timings(x); }
     if let Some(x) = args.cursor_update { builder.add_cursor_update(x); }
     builder.finish()
   }
@@ -1198,6 +1200,13 @@ impl<'a> VideoFrame<'a> {
     // which contains a valid value in this slot
     unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<CursorUpdate>>(VideoFrame::VT_CURSOR_UPDATE, None)}
   }
+  #[inline]
+  pub fn timings(&self) -> Option<Timings<'a>> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<Timings>>(VideoFrame::VT_TIMINGS, None)}
+  }
 }
 
 impl flatbuffers::Verifiable for VideoFrame<'_> {
@@ -1209,6 +1218,7 @@ impl flatbuffers::Verifiable for VideoFrame<'_> {
     v.visit_table(pos)?
      .visit_field::<u64>("video_bytes", Self::VT_VIDEO_BYTES, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<CursorUpdate>>("cursor_update", Self::VT_CURSOR_UPDATE, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<Timings>>("timings", Self::VT_TIMINGS, false)?
      .finish();
     Ok(())
   }
@@ -1216,6 +1226,7 @@ impl flatbuffers::Verifiable for VideoFrame<'_> {
 pub struct VideoFrameArgs<'a> {
     pub video_bytes: u64,
     pub cursor_update: Option<flatbuffers::WIPOffset<CursorUpdate<'a>>>,
+    pub timings: Option<flatbuffers::WIPOffset<Timings<'a>>>,
 }
 impl<'a> Default for VideoFrameArgs<'a> {
   #[inline]
@@ -1223,15 +1234,16 @@ impl<'a> Default for VideoFrameArgs<'a> {
     VideoFrameArgs {
       video_bytes: 0,
       cursor_update: None,
+      timings: None,
     }
   }
 }
 
-pub struct VideoFrameBuilder<'a: 'b, 'b> {
-  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+pub struct VideoFrameBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
   start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
 }
-impl<'a: 'b, 'b> VideoFrameBuilder<'a, 'b> {
+impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> VideoFrameBuilder<'a, 'b, A> {
   #[inline]
   pub fn add_video_bytes(&mut self, video_bytes: u64) {
     self.fbb_.push_slot::<u64>(VideoFrame::VT_VIDEO_BYTES, video_bytes, 0);
@@ -1241,7 +1253,11 @@ impl<'a: 'b, 'b> VideoFrameBuilder<'a, 'b> {
     self.fbb_.push_slot_always::<flatbuffers::WIPOffset<CursorUpdate>>(VideoFrame::VT_CURSOR_UPDATE, cursor_update);
   }
   #[inline]
-  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> VideoFrameBuilder<'a, 'b> {
+  pub fn add_timings(&mut self, timings: flatbuffers::WIPOffset<Timings<'b >>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<Timings>>(VideoFrame::VT_TIMINGS, timings);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>) -> VideoFrameBuilder<'a, 'b, A> {
     let start = _fbb.start_table();
     VideoFrameBuilder {
       fbb_: _fbb,
@@ -1260,6 +1276,7 @@ impl core::fmt::Debug for VideoFrame<'_> {
     let mut ds = f.debug_struct("VideoFrame");
       ds.field("video_bytes", &self.video_bytes());
       ds.field("cursor_update", &self.cursor_update());
+      ds.field("timings", &self.timings());
       ds.finish()
   }
 }
@@ -1288,8 +1305,8 @@ impl<'a> CursorUpdate<'a> {
     CursorUpdate { _tab: table }
   }
   #[allow(unused_mut)]
-  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
-    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr, A: flatbuffers::Allocator + 'bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr, A>,
     args: &'args CursorUpdateArgs<'args>
   ) -> flatbuffers::WIPOffset<CursorUpdate<'bldr>> {
     let mut builder = CursorUpdateBuilder::new(_fbb);
@@ -1353,11 +1370,11 @@ impl<'a> Default for CursorUpdateArgs<'a> {
   }
 }
 
-pub struct CursorUpdateBuilder<'a: 'b, 'b> {
-  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+pub struct CursorUpdateBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
   start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
 }
-impl<'a: 'b, 'b> CursorUpdateBuilder<'a, 'b> {
+impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> CursorUpdateBuilder<'a, 'b, A> {
   #[inline]
   pub fn add_shape(&mut self, shape: flatbuffers::WIPOffset<CursorShape<'b >>) {
     self.fbb_.push_slot_always::<flatbuffers::WIPOffset<CursorShape>>(CursorUpdate::VT_SHAPE, shape);
@@ -1371,7 +1388,7 @@ impl<'a: 'b, 'b> CursorUpdateBuilder<'a, 'b> {
     self.fbb_.push_slot::<bool>(CursorUpdate::VT_VISIBLE, visible, false);
   }
   #[inline]
-  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> CursorUpdateBuilder<'a, 'b> {
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>) -> CursorUpdateBuilder<'a, 'b, A> {
     let start = _fbb.start_table();
     CursorUpdateBuilder {
       fbb_: _fbb,
@@ -1421,8 +1438,8 @@ impl<'a> CursorShape<'a> {
     CursorShape { _tab: table }
   }
   #[allow(unused_mut)]
-  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
-    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr, A: flatbuffers::Allocator + 'bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr, A>,
     args: &'args CursorShapeArgs<'args>
   ) -> flatbuffers::WIPOffset<CursorShape<'bldr>> {
     let mut builder = CursorShapeBuilder::new(_fbb);
@@ -1508,11 +1525,11 @@ impl<'a> Default for CursorShapeArgs<'a> {
   }
 }
 
-pub struct CursorShapeBuilder<'a: 'b, 'b> {
-  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+pub struct CursorShapeBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
   start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
 }
-impl<'a: 'b, 'b> CursorShapeBuilder<'a, 'b> {
+impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> CursorShapeBuilder<'a, 'b, A> {
   #[inline]
   pub fn add_image(&mut self, image: flatbuffers::WIPOffset<flatbuffers::Vector<'b , u8>>) {
     self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(CursorShape::VT_IMAGE, image);
@@ -1534,7 +1551,7 @@ impl<'a: 'b, 'b> CursorShapeBuilder<'a, 'b> {
     self.fbb_.push_slot_always::<&Size2u>(CursorShape::VT_RESOLUTION, resolution);
   }
   #[inline]
-  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> CursorShapeBuilder<'a, 'b> {
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>) -> CursorShapeBuilder<'a, 'b, A> {
     let start = _fbb.start_table();
     CursorShapeBuilder {
       fbb_: _fbb,
@@ -1556,6 +1573,137 @@ impl core::fmt::Debug for CursorShape<'_> {
       ds.field("xor", &self.xor());
       ds.field("hotspot", &self.hotspot());
       ds.field("resolution", &self.resolution());
+      ds.finish()
+  }
+}
+pub enum TimingsOffset {}
+#[derive(Copy, Clone, PartialEq)]
+
+pub struct Timings<'a> {
+  pub _tab: flatbuffers::Table<'a>,
+}
+
+impl<'a> flatbuffers::Follow<'a> for Timings<'a> {
+  type Inner = Timings<'a>;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    Self { _tab: flatbuffers::Table::new(buf, loc) }
+  }
+}
+
+impl<'a> Timings<'a> {
+  pub const VT_ENCODE_BEGIN: flatbuffers::VOffsetT = 4;
+  pub const VT_ENCODE_END: flatbuffers::VOffsetT = 6;
+  pub const VT_NETWORK_SEND: flatbuffers::VOffsetT = 8;
+
+  #[inline]
+  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+    Timings { _tab: table }
+  }
+  #[allow(unused_mut)]
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr, A: flatbuffers::Allocator + 'bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr, A>,
+    args: &'args TimingsArgs
+  ) -> flatbuffers::WIPOffset<Timings<'bldr>> {
+    let mut builder = TimingsBuilder::new(_fbb);
+    builder.add_network_send(args.network_send);
+    builder.add_encode_end(args.encode_end);
+    builder.add_encode_begin(args.encode_begin);
+    builder.finish()
+  }
+
+
+  #[inline]
+  pub fn encode_begin(&self) -> u32 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u32>(Timings::VT_ENCODE_BEGIN, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn encode_end(&self) -> u32 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u32>(Timings::VT_ENCODE_END, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn network_send(&self) -> u32 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u32>(Timings::VT_NETWORK_SEND, Some(0)).unwrap()}
+  }
+}
+
+impl flatbuffers::Verifiable for Timings<'_> {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.visit_table(pos)?
+     .visit_field::<u32>("encode_begin", Self::VT_ENCODE_BEGIN, false)?
+     .visit_field::<u32>("encode_end", Self::VT_ENCODE_END, false)?
+     .visit_field::<u32>("network_send", Self::VT_NETWORK_SEND, false)?
+     .finish();
+    Ok(())
+  }
+}
+pub struct TimingsArgs {
+    pub encode_begin: u32,
+    pub encode_end: u32,
+    pub network_send: u32,
+}
+impl<'a> Default for TimingsArgs {
+  #[inline]
+  fn default() -> Self {
+    TimingsArgs {
+      encode_begin: 0,
+      encode_end: 0,
+      network_send: 0,
+    }
+  }
+}
+
+pub struct TimingsBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
+  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+}
+impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> TimingsBuilder<'a, 'b, A> {
+  #[inline]
+  pub fn add_encode_begin(&mut self, encode_begin: u32) {
+    self.fbb_.push_slot::<u32>(Timings::VT_ENCODE_BEGIN, encode_begin, 0);
+  }
+  #[inline]
+  pub fn add_encode_end(&mut self, encode_end: u32) {
+    self.fbb_.push_slot::<u32>(Timings::VT_ENCODE_END, encode_end, 0);
+  }
+  #[inline]
+  pub fn add_network_send(&mut self, network_send: u32) {
+    self.fbb_.push_slot::<u32>(Timings::VT_NETWORK_SEND, network_send, 0);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>) -> TimingsBuilder<'a, 'b, A> {
+    let start = _fbb.start_table();
+    TimingsBuilder {
+      fbb_: _fbb,
+      start_: start,
+    }
+  }
+  #[inline]
+  pub fn finish(self) -> flatbuffers::WIPOffset<Timings<'a>> {
+    let o = self.fbb_.end_table(self.start_);
+    flatbuffers::WIPOffset::new(o.value())
+  }
+}
+
+impl core::fmt::Debug for Timings<'_> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    let mut ds = f.debug_struct("Timings");
+      ds.field("encode_begin", &self.encode_begin());
+      ds.field("encode_end", &self.encode_end());
+      ds.field("network_send", &self.network_send());
       ds.finish()
   }
 }
@@ -1693,8 +1841,8 @@ impl<'a> ControlFrame<'a> {
     ControlFrame { _tab: table }
   }
   #[allow(unused_mut)]
-  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
-    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr, A: flatbuffers::Allocator + 'bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr, A>,
     args: &'args ControlFrameArgs
   ) -> flatbuffers::WIPOffset<ControlFrame<'bldr>> {
     let mut builder = ControlFrameBuilder::new(_fbb);
@@ -1814,11 +1962,11 @@ impl<'a> Default for ControlFrameArgs {
   }
 }
 
-pub struct ControlFrameBuilder<'a: 'b, 'b> {
-  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+pub struct ControlFrameBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
   start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
 }
-impl<'a: 'b, 'b> ControlFrameBuilder<'a, 'b> {
+impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> ControlFrameBuilder<'a, 'b, A> {
   #[inline]
   pub fn add_data_type(&mut self, data_type: ControlPacket) {
     self.fbb_.push_slot::<ControlPacket>(ControlFrame::VT_DATA_TYPE, data_type, ControlPacket::NONE);
@@ -1828,7 +1976,7 @@ impl<'a: 'b, 'b> ControlFrameBuilder<'a, 'b> {
     self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(ControlFrame::VT_DATA, data);
   }
   #[inline]
-  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> ControlFrameBuilder<'a, 'b> {
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>) -> ControlFrameBuilder<'a, 'b, A> {
     let start = _fbb.start_table();
     ControlFrameBuilder {
       fbb_: _fbb,

@@ -1,7 +1,7 @@
-use crate::image::ImageBuf;
 use crate::util::DesktopUpdate;
 use crate::viewer::compose_renderable::ComposeRenderable;
 use crate::viewer::display_state::DisplayState;
+use crate::{image::ImageBuf, util::PerformanceMonitor};
 use wgpu::{BindGroup, RenderPipeline, Texture};
 
 pub struct DesktopView {
@@ -10,6 +10,14 @@ pub struct DesktopView {
     bind_group: BindGroup,
     render_pipeline: RenderPipeline,
     next_update: Option<DesktopUpdate<ImageBuf>>,
+
+    //TODO: Move to other struct
+    pub encode_wait: PerformanceMonitor,
+    pub encode: PerformanceMonitor,
+    pub send_wait: PerformanceMonitor,
+    pub decode_wait: PerformanceMonitor,
+    pub decode: PerformanceMonitor,
+    pub present_wait: PerformanceMonitor,
 }
 
 impl DesktopView {
@@ -135,6 +143,13 @@ impl DesktopView {
             bind_group,
             render_pipeline,
             next_update: None,
+
+            encode_wait: PerformanceMonitor::new(),
+            encode: PerformanceMonitor::new(),
+            send_wait: PerformanceMonitor::new(),
+            decode_wait: PerformanceMonitor::new(),
+            decode: PerformanceMonitor::new(),
+            present_wait: PerformanceMonitor::new(),
         }
     }
 
@@ -158,7 +173,20 @@ impl DesktopView {
         let output = state.surface.get_current_texture()?;
         let output_view = output.texture.create_view(&Default::default());
 
-        if let Some(update) = self.next_update.take() {
+        if let Some(mut update) = self.next_update.take() {
+            update.timings.present = update.timings.elapsed_since_recv().unwrap();
+
+            self.encode_wait.update_manual(update.timings.encode_begin);
+            self.encode
+                .update_manual(&update.timings.encode_end - &update.timings.encode_begin);
+            self.send_wait
+                .update_manual(&update.timings.network_send - &update.timings.encode_end);
+            self.decode_wait.update_manual(update.timings.decode_begin);
+            self.decode
+                .update_manual(&update.timings.decode_end - &update.timings.decode_begin);
+            self.present_wait
+                .update_manual(&update.timings.present - &update.timings.decode_end);
+
             self.composer
                 .render(state, update, &self.compose_texture)
                 .expect("cannot fail");

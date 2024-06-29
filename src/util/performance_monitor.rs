@@ -34,11 +34,16 @@ impl PerformanceMonitor {
     pub fn update(&mut self) {
         let now = Instant::now();
         let dur = Micros::from_duration_saturating(now - self.last_measure);
-        let curr_pos = self.sample_pos;
+
         self.last_measure = now;
+        self.update_manual(dur);
+    }
+
+    pub fn update_manual(&mut self, duration: Micros) {
+        let curr_pos = self.sample_pos;
         self.valid_samples = usize::min(self.samples.len(), self.valid_samples + 1);
         self.sample_pos = (curr_pos + 1) % self.samples.len();
-        self.samples[curr_pos] = dur;
+        self.samples[curr_pos] = duration;
     }
 
     pub fn start_zone(&mut self) -> PerformanceMonitorZone {
