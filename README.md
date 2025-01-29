@@ -8,22 +8,22 @@ This project is currently in pre-alpha, so no prebuilt binaries are provided.
 
 
 ## Note
-
-I'm busy serving the mandatory military service in South Korea, please expect delayed response times up to 6 weeks.
-
-That also means I don't really have any time to work on this project. :(
+This project has been put into halt as I was busy serving the mandatory military service as a Korean citizen.
+I expect to resume working on this project within 2025.
 
 
 ## Building
 The building process is done and tested in windows.
-To start building you need to have [nasm](https://www.nasm.us), [cmake](https://cmake.org) and [rust](https://cmake.org) installed on your system.
+Before starting you need to have [nasm](https://www.nasm.us), [cmake](https://cmake.org) and [rust](https://cmake.org) installed on your system.
 
 In the project folder run the cargo command to build: ```cargo build```.
 
 After it builds successfully, go to the "target" folder and then into the "debug" folder, there will be the executables.
 
 ## Use
-⚠️It only works with the local IP 127.0.0.1, since it is not yet ready for external IP's.
+⚠️Only works with the local IP 127.0.0.1, since it is not yet ready for external IP's.
+Not only security but also handling latency and limited throughput.
+
 There are 2 ways to use it:
 1. If you want to do a quick debug, run the "debug" executable.
 2. If you want to use both the server and the client, first run the server executable with the command: ```server.exe```.
@@ -33,13 +33,10 @@ For more information run the command: ```client.exe --help```.
 
 
 
-## Contribute
-Help contribute to this project by sending issues or pull requests, they are appreciated and you will help the project. :)
-
-It may take a long time to respond as the note says.
+## Contribution
+You may contribute to this project by sending issues or pull requests, they are appreciated and will surely help the project. :)
 
 ## License
-
 This project is licensed under GPLv3 or (at your option) any later version of GPL released by Free Software Foundation.
 
 A copy of GPLv3 license is available at file `LICENSE.txt`.
